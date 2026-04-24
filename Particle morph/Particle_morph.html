@@ -15,14 +15,20 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:             #030305;
-  --panel:          rgba(10, 10, 14, 0.55);
-  --panel-border:   rgba(255, 255, 255, 0.08);
-  --panel-hairline: rgba(255, 255, 255, 0.05);
-  --text-primary:   #f5f5f7;
-  --text-secondary: rgba(245, 245, 247, 0.55);
-  --text-tertiary:  rgba(245, 245, 247, 0.30);
+  --bg:             #06070b;
+  --bg-deep:        #020205;
+  --panel:          rgba(16, 18, 28, 0.62);
+  --panel-border:   rgba(255, 255, 255, 0.14);
+  --panel-hairline: rgba(255, 255, 255, 0.08);
+  --text-primary:   #f6f8ff;
+  --text-secondary: rgba(246, 248, 255, 0.66);
+  --text-tertiary:  rgba(246, 248, 255, 0.40);
   --accent:         #00e5ff;
+  --accent-2:       #5b8def;
+  --accent-3:       #b14bff;
+  --accent-rgb:     0, 229, 255;
+  --accent2-rgb:    91, 141, 239;
+  --accent3-rgb:    177, 75, 255;
 
   --font-display: 'Fraunces', Georgia, serif;
   --font-mono:    'JetBrains Mono', ui-monospace, Menlo, monospace;
@@ -31,32 +37,120 @@
 html, body {
   width: 100%; height: 100%;
   overflow: hidden;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 16% 18%, rgba(var(--accent-rgb), 0.17), transparent 43%),
+    radial-gradient(circle at 84% 16%, rgba(var(--accent2-rgb), 0.14), transparent 37%),
+    radial-gradient(circle at 58% 88%, rgba(var(--accent3-rgb), 0.16), transparent 46%),
+    linear-gradient(160deg, #0a0f1a 0%, #05070f 52%, var(--bg-deep) 100%);
   color: var(--text-primary);
   font-family: var(--font-mono);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   cursor: none;
+  transition: background 0.85s ease;
 }
 
 /* ============================================================
    2. ATMOSPHERIC LAYERS
    ============================================================ */
+body::before {
+  content: '';
+  position: fixed; inset: -34%;
+  pointer-events: none; z-index: 0;
+  background:
+    conic-gradient(from 170deg at 50% 50%,
+      rgba(var(--accent-rgb), 0.16),
+      rgba(var(--accent2-rgb), 0.08),
+      rgba(var(--accent3-rgb), 0.14),
+      rgba(var(--accent-rgb), 0.16));
+  filter: blur(100px) saturate(1.15);
+  animation: skySpin 28s linear infinite;
+}
+
 .vignette {
   position: fixed; inset: 0;
-  pointer-events: none; z-index: 1;
-  background: radial-gradient(ellipse at center,
-              transparent 40%,
-              rgba(0, 0, 0, 0.65) 100%);
+  pointer-events: none; z-index: 4;
+  background:
+    radial-gradient(ellipse at center,
+      rgba(0, 0, 0, 0) 36%,
+      rgba(0, 0, 0, 0.72) 100%);
 }
 
 body::after {
   content: '';
   position: fixed; inset: 0;
-  pointer-events: none; z-index: 2;
-  opacity: 0.04;
+  pointer-events: none; z-index: 5;
+  opacity: 0.045;
   mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+.aurora {
+  position: fixed;
+  pointer-events: none;
+  z-index: 2;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  filter: blur(22px) saturate(1.15);
+}
+
+.aurora--a {
+  width: 68vw; height: 68vw;
+  min-width: 580px; min-height: 580px;
+  left: -14vw; top: -30vh;
+  background: radial-gradient(circle,
+    rgba(var(--accent-rgb), 0.34) 0%,
+    rgba(var(--accent2-rgb), 0.20) 38%,
+    rgba(var(--accent3-rgb), 0.00) 68%);
+  animation: auroraDriftA 16s ease-in-out infinite alternate;
+}
+
+.aurora--b {
+  width: 56vw; height: 56vw;
+  min-width: 440px; min-height: 440px;
+  right: -10vw; bottom: -28vh;
+  background: radial-gradient(circle,
+    rgba(var(--accent3-rgb), 0.26) 0%,
+    rgba(var(--accent2-rgb), 0.19) 42%,
+    rgba(var(--accent-rgb), 0.00) 70%);
+  animation: auroraDriftB 20s ease-in-out infinite alternate;
+}
+
+.scan-grid {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 3;
+  opacity: 0.15;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 74px 74px;
+  mask-image: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.75), transparent 78%);
+  animation: gridDrift 20s linear infinite;
+}
+
+@keyframes skySpin {
+  from { transform: rotate(0deg) scale(1); }
+  to   { transform: rotate(360deg) scale(1.04); }
+}
+
+@keyframes auroraDriftA {
+  0% { transform: translate3d(-3%, -2%, 0) scale(1.0); }
+  100% { transform: translate3d(7%, 9%, 0) scale(1.14); }
+}
+
+@keyframes auroraDriftB {
+  0% { transform: translate3d(0, 0, 0) scale(1.0); }
+  100% { transform: translate3d(-8%, -11%, 0) scale(1.2); }
+}
+
+@keyframes gridDrift {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(0, 74px, 0); }
+}
+
+@keyframes panelEdgePulse {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 0.86; }
 }
 
 /* ============================================================
@@ -65,7 +159,18 @@ body::after {
 #canvas {
   position: fixed; inset: 0;
   display: block;
-  z-index: 0;
+  z-index: 1;
+}
+
+.ui-shell {
+  position: fixed;
+  top: 26px; left: 26px; right: 26px;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: minmax(230px, 340px) minmax(302px, 370px);
+  justify-content: space-between;
+  align-items: start;
+  pointer-events: none;
 }
 
 /* ============================================================
@@ -75,76 +180,126 @@ body::after {
   position: fixed; top: 0; left: 0;
   width: 30px; height: 30px;
   margin: -15px 0 0 -15px;
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(var(--accent-rgb), 0.78);
   border-radius: 50%;
   pointer-events: none;
   z-index: 100;
-  mix-blend-mode: difference;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.30) inset,
+    0 0 20px rgba(var(--accent-rgb), 0.42);
+  mix-blend-mode: normal;
   transition:
     width 0.25s cubic-bezier(.2,.9,.2,1),
     height 0.25s cubic-bezier(.2,.9,.2,1),
     margin 0.25s cubic-bezier(.2,.9,.2,1),
-    border-color 0.25s ease;
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 .cursor::before {
   content: '';
   position: absolute; top: 50%; left: 50%;
   width: 2px; height: 2px;
   margin: -1px 0 0 -1px;
-  background: #fff;
+  background: rgba(var(--accent-rgb), 1);
   border-radius: 50%;
 }
 .cursor.active {
   width: 70px; height: 70px;
   margin: -35px 0 0 -35px;
-  border-color: var(--accent);
+  border-color: var(--accent-3);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.24) inset,
+    0 0 32px rgba(var(--accent3-rgb), 0.65);
 }
 
 /* ============================================================
    5. HUD (top-left readout)
    ============================================================ */
 .hud {
-  position: fixed; top: 28px; left: 28px;
-  z-index: 10;
+  position: relative;
   pointer-events: none;
-  display: flex; flex-direction: column;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(340px, 36vw);
+  opacity: 0;
+  transform: translate3d(0, 16px, 0);
+  transition: opacity 0.8s ease, transform 0.8s cubic-bezier(.2,.9,.2,1);
+}
+
+body.ready .hud {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
 }
 
 .hud__mark {
   font-family: var(--font-display);
   font-style: italic;
-  font-weight: 400;
-  font-size: 32px;
-  letter-spacing: -0.025em;
+  font-weight: 560;
+  font-size: clamp(28px, 2.8vw, 40px);
+  letter-spacing: -0.022em;
   line-height: 1;
   color: var(--text-primary);
+  text-shadow:
+    0 0 30px rgba(var(--accent-rgb), 0.30),
+    0 6px 26px rgba(0, 0, 0, 0.42);
 }
 .hud__mark span { color: var(--accent); font-style: normal; }
 
 .hud__sub {
-  margin-top: 10px;
-  font-size: 9.5px;
-  letter-spacing: 0.24em;
+  align-self: start;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: linear-gradient(125deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+  border: 1px solid rgba(255,255,255,0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-size: 9px;
+  letter-spacing: 0.21em;
   text-transform: uppercase;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 .hud__data {
-  margin-top: 26px;
-  display: flex; flex-direction: column;
-  gap: 3px;
+  display: grid;
+  gap: 6px;
+  padding: 15px 16px;
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(18, 24, 37, 0.78), rgba(8, 10, 18, 0.56));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 20px 38px rgba(0, 0, 0, 0.44),
+    0 0 26px rgba(var(--accent2-rgb), 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   color: var(--text-secondary);
 }
+
+.hud__data > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.hud__data > div:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
 .hud__data i {
   font-style: normal;
   color: var(--text-tertiary);
   display: inline-block;
-  min-width: 72px;
+  min-width: 76px;
 }
 .hud__data b {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -152,42 +307,95 @@ body::after {
    6. CONTROL PANEL (top-right, glass-morph)
    ============================================================ */
 .panel {
-  position: fixed; top: 28px; right: 28px;
-  z-index: 10;
-  width: 308px;
-  max-height: calc(100vh - 56px);
+  --panel-tilt-x: 0deg;
+  --panel-tilt-y: 0deg;
+  --panel-shine-x: 50%;
+  --panel-shine-y: 35%;
+  position: relative;
+  pointer-events: auto;
+  width: 100%;
+  max-width: 370px;
+  max-height: calc(100vh - 130px);
   overflow-y: auto;
-  padding: 22px;
-  background: var(--panel);
+  padding: 20px;
+  background:
+    linear-gradient(170deg, rgba(24, 30, 49, 0.76) 0%, rgba(10, 12, 22, 0.62) 52%, rgba(9, 10, 18, 0.80) 100%);
   border: 1px solid var(--panel-border);
-  border-radius: 2px;
-  backdrop-filter: blur(24px) saturate(1.2);
-  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border-radius: 18px;
+  backdrop-filter: blur(22px) saturate(1.32);
+  -webkit-backdrop-filter: blur(22px) saturate(1.32);
   box-shadow:
-    0 0 0 1px rgba(255,255,255,0.02) inset,
-    0 30px 60px rgba(0,0,0,0.5);
+    0 28px 70px rgba(0,0,0,0.56),
+    0 10px 35px rgba(var(--accent3-rgb),0.16),
+    inset 0 0 0 1px rgba(255,255,255,0.04);
+  transform: perspective(1200px) rotateX(var(--panel-tilt-x)) rotateY(var(--panel-tilt-y));
+  transform-origin: center center;
+  transition:
+    transform 0.14s linear,
+    border-color 0.35s ease,
+    box-shadow 0.35s ease,
+    opacity 0.8s ease,
+    filter 0.8s ease;
+  opacity: 0;
+  filter: blur(7px);
 }
-.panel::-webkit-scrollbar { width: 0; display: none; }
+
+body.ready .panel {
+  opacity: 1;
+  filter: blur(0);
+}
+
+.panel::before {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(260px circle at var(--panel-shine-x) var(--panel-shine-y),
+      rgba(255,255,255,0.28),
+      rgba(255,255,255,0.0) 68%);
+  mix-blend-mode: screen;
+  opacity: 0.32;
+}
+
+.panel::after {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1px solid rgba(var(--accent-rgb), 0.26);
+  opacity: 0.5;
+  animation: panelEdgePulse 4s ease-in-out infinite;
+}
+
+.panel::-webkit-scrollbar { width: 7px; }
+.panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 99px;
+}
 
 .panel__header {
+  position: relative;
   display: flex; align-items: center; justify-content: space-between;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--panel-hairline);
-  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 16px;
 }
 
 .panel__title {
   font-size: 10px;
-  letter-spacing: 0.26em;
+  letter-spacing: 0.34em;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
 
 .panel__indicator {
-  width: 8px; height: 8px;
+  width: 9px; height: 9px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 12px var(--accent);
+  box-shadow:
+    0 0 0 5px rgba(var(--accent-rgb), 0.12),
+    0 0 16px rgba(var(--accent-rgb), 0.9);
   animation: pulse 2s ease-in-out infinite;
 }
 @keyframes pulse {
@@ -195,64 +403,77 @@ body::after {
   50%      { opacity: 0.35; transform: scale(0.85); }
 }
 
-.section { margin-bottom: 22px; }
+.section {
+  margin-bottom: 12px;
+  padding: 13px 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+}
 .section:last-child { margin-bottom: 0; }
 
 .section__label {
   display: flex; justify-content: space-between; align-items: baseline;
   font-size: 9px;
-  letter-spacing: 0.26em;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .section__value {
   color: var(--text-primary);
-  letter-spacing: 0.1em;
-  font-weight: 500;
+  letter-spacing: 0.12em;
+  font-weight: 600;
 }
 
 /* Shape grid */
 .shape-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  gap: 8px;
 }
 
 .shape-btn {
   aspect-ratio: 1;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--panel-hairline);
-  border-radius: 2px;
+  background:
+    linear-gradient(160deg, rgba(255,255,255,0.085), rgba(255,255,255,0.03));
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 12px;
   cursor: none;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   gap: 6px;
-  padding: 8px;
+  padding: 9px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 8px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.17em;
   text-transform: uppercase;
   transition:
-    background 0.3s ease,
-    border-color 0.3s ease,
-    color 0.3s ease,
-    transform 0.3s cubic-bezier(.2,.9,.2,1);
+    background 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease,
+    transform 0.25s cubic-bezier(.2,.9,.2,1),
+    box-shadow 0.25s ease;
 }
 .shape-btn:hover {
-  background: rgba(255,255,255,0.06);
-  border-color: rgba(255,255,255,0.22);
+  background: linear-gradient(145deg, rgba(255,255,255,0.18), rgba(255,255,255,0.05));
+  border-color: rgba(255,255,255,0.42);
   color: var(--text-primary);
-  transform: translateY(-1px);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.34);
 }
 .shape-btn.active {
-  background: rgba(0, 229, 255, 0.06);
+  background:
+    linear-gradient(145deg, rgba(var(--accent-rgb), 0.23), rgba(var(--accent2-rgb), 0.08));
   border-color: var(--accent);
   color: var(--text-primary);
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.45) inset,
+    0 0 24px rgba(var(--accent-rgb), 0.35);
 }
 .shape-btn svg {
-  width: 22px; height: 22px;
+  width: 23px; height: 23px;
   stroke: currentColor; fill: none;
   stroke-width: 1.25;
   stroke-linecap: round;
@@ -263,23 +484,26 @@ body::after {
 .palette-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 6px;
+  gap: 8px;
 }
 .palette-btn {
   aspect-ratio: 1;
-  border: 1px solid var(--panel-hairline);
+  border: 1px solid rgba(255, 255, 255, 0.34);
   border-radius: 50%;
   cursor: none;
   position: relative;
-  transition: transform 0.2s cubic-bezier(.2,.9,.2,1), box-shadow 0.2s ease;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s cubic-bezier(.2,.9,.2,1), box-shadow 0.2s ease, border-color 0.2s ease;
 }
 .palette-btn:hover {
-  transform: scale(1.15);
+  transform: scale(1.14);
+  border-color: rgba(255, 255, 255, 0.86);
 }
 .palette-btn.active {
   box-shadow:
-    0 0 0 2px var(--bg),
-    0 0 0 3px rgba(255, 255, 255, 0.7);
+    0 0 0 2px rgba(3, 4, 8, 0.92),
+    0 0 0 3px rgba(255, 255, 255, 0.92),
+    0 0 16px rgba(var(--accent-rgb), 0.45);
 }
 
 /* Sliders */
@@ -289,28 +513,30 @@ input[type=range] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 0;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb),0.75), rgba(var(--accent2-rgb),0.36) 45%, rgba(255, 255, 255, 0.12));
+  border-radius: 999px;
   outline: none;
   cursor: none;
 }
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
-  width: 10px; height: 10px;
-  background: var(--text-primary);
+  width: 12px; height: 12px;
+  background: linear-gradient(145deg, #ffffff, var(--accent));
   border-radius: 50%;
   cursor: none;
-  transition: transform 0.2s ease, background 0.2s ease;
+  transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
   border: none;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.38), 0 0 12px rgba(var(--accent-rgb),0.6);
 }
 input[type=range]::-webkit-slider-thumb:hover {
   transform: scale(1.6);
-  background: var(--accent);
+  background: linear-gradient(145deg, #ffffff, var(--accent-3));
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.42), 0 0 16px rgba(var(--accent3-rgb),0.72);
 }
 input[type=range]::-moz-range-thumb {
-  width: 10px; height: 10px;
-  background: var(--text-primary);
+  width: 12px; height: 12px;
+  background: linear-gradient(145deg, #ffffff, var(--accent));
   border-radius: 50%;
   border: none;
   cursor: none;
@@ -321,49 +547,112 @@ input[type=range]::-moz-range-thumb {
    ============================================================ */
 .hint {
   position: fixed;
-  bottom: 28px; left: 50%;
+  bottom: 20px; left: 50%;
   transform: translateX(-50%);
-  z-index: 10;
-  display: flex; gap: 28px;
+  z-index: 12;
+  display: flex;
+  gap: 24px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: linear-gradient(120deg, rgba(14,20,34,0.74), rgba(9,12,22,0.56));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    0 12px 30px rgba(0,0,0,0.44),
+    0 0 26px rgba(var(--accent2-rgb), 0.19);
   font-size: 9px;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--text-tertiary);
   pointer-events: none;
+  opacity: 0;
+  filter: blur(8px);
+  transition: opacity 0.8s ease 0.1s, filter 0.8s ease 0.1s;
 }
-.hint span { color: var(--text-primary); font-weight: 500; }
+
+body.ready .hint {
+  opacity: 1;
+  filter: blur(0);
+}
+
+.hint span {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-shadow: 0 0 14px rgba(var(--accent-rgb), 0.36);
+}
 
 /* ============================================================
    8. RESPONSIVE (mobile)
    ============================================================ */
+@media (max-width: 980px) {
+  .ui-shell {
+    grid-template-columns: minmax(220px, 300px) minmax(280px, 340px);
+    top: 18px; left: 18px; right: 18px;
+  }
+}
+
 @media (max-width: 760px) {
   html, body { cursor: default; }
   .cursor { display: none; }
   .shape-btn, .palette-btn, input[type=range] { cursor: pointer; }
 
-  .hud { top: 14px; left: 14px; }
-  .hud__mark { font-size: 22px; }
-  .hud__sub { font-size: 8.5px; margin-top: 6px; }
-  .hud__data { margin-top: 14px; font-size: 9px; }
+  .aurora { opacity: 0.46; }
+  .scan-grid { opacity: 0.08; }
+
+  .ui-shell {
+    top: 12px; left: 12px; right: 12px;
+    display: block;
+  }
+
+  .hud {
+    width: min(78vw, 280px);
+  }
+
+  .hud__mark { font-size: 24px; }
+  .hud__sub { font-size: 8px; }
+  .hud__data { font-size: 9px; padding: 12px 12px; }
   .hud__data i { min-width: 60px; }
 
   .panel {
+    position: fixed;
     top: auto; right: 12px; left: 12px; bottom: 12px;
     width: auto;
-    max-height: 52vh;
+    max-width: none;
+    max-height: 56vh;
     padding: 16px;
+    --panel-tilt-x: 0deg;
+    --panel-tilt-y: 0deg;
   }
+
   .hint { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  body::before,
+  .aurora,
+  .scan-grid,
+  .panel::after {
+    animation: none !important;
+  }
 }
 
 /* Loading state */
 .loading {
   position: fixed; inset: 0;
   z-index: 1000;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(var(--accent-rgb), 0.14), transparent 48%),
+    linear-gradient(150deg, #090c14 0%, #020205 100%);
   display: flex; align-items: center; justify-content: center;
   font-size: 11px;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--text-secondary);
   transition: opacity 0.6s ease 0.2s, visibility 0s 0.8s;
@@ -376,75 +665,80 @@ input[type=range]::-moz-range-thumb {
 
 <!-- Atmosphere -->
 <div class="vignette"></div>
+<div class="aurora aurora--a" aria-hidden="true"></div>
+<div class="aurora aurora--b" aria-hidden="true"></div>
+<div class="scan-grid" aria-hidden="true"></div>
 <canvas id="canvas"></canvas>
 <div class="cursor" id="cursor"></div>
 <div class="loading" id="loading">Initialising particle field…</div>
 
-<!-- HUD (top-left) -->
-<div class="hud">
-  <div class="hud__mark">particle<span>.</span>morph</div>
-  <div class="hud__sub">v1.0 · three.js particle engine</div>
-  <div class="hud__data">
-    <div><i>FPS</i> <b id="fps">--</b></div>
-    <div><i>COUNT</i> <b id="count">5000</b></div>
-    <div><i>SHAPE</i> <b id="shape-name">SPHERE</b></div>
-    <div><i>PALETTE</i> <b id="palette-name">AURORA</b></div>
+<div class="ui-shell">
+  <!-- HUD (top-left) -->
+  <div class="hud">
+    <div class="hud__mark">particle<span>.</span>morph</div>
+    <div class="hud__sub">v1.0 · three.js particle engine</div>
+    <div class="hud__data">
+      <div><i>FPS</i> <b id="fps">--</b></div>
+      <div><i>COUNT</i> <b id="count">5000</b></div>
+      <div><i>SHAPE</i> <b id="shape-name">SPHERE</b></div>
+      <div><i>PALETTE</i> <b id="palette-name">AURORA</b></div>
+    </div>
   </div>
+
+  <!-- Control panel (top-right) -->
+  <aside class="panel">
+    <div class="panel__header">
+      <div class="panel__title">Control Deck</div>
+      <div class="panel__indicator"></div>
+    </div>
+
+    <div class="section">
+      <div class="section__label">
+        <span>Morphology</span>
+        <span class="section__value" id="shape-value">SPHERE</span>
+      </div>
+      <div class="shape-grid" id="shape-grid"></div>
+    </div>
+
+    <div class="section">
+      <div class="section__label">
+        <span>Palette</span>
+        <span class="section__value" id="palette-value">AURORA</span>
+      </div>
+      <div class="palette-grid" id="palette-grid"></div>
+    </div>
+
+    <div class="section">
+      <div class="section__label">
+        <span>Density</span>
+        <span class="section__value" id="density-value">5000</span>
+      </div>
+      <div class="slider-wrap">
+        <input type="range" id="density" min="1500" max="15000" step="500" value="5000" />
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section__label">
+        <span>Particle Size</span>
+        <span class="section__value" id="size-value">0.040</span>
+      </div>
+      <div class="slider-wrap">
+        <input type="range" id="size" min="10" max="120" step="1" value="40" />
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section__label">
+        <span>Repel Field</span>
+        <span class="section__value" id="repel-value">1.00</span>
+      </div>
+      <div class="slider-wrap">
+        <input type="range" id="repel" min="0" max="200" step="1" value="100" />
+      </div>
+    </div>
+  </aside>
 </div>
-
-<!-- Control panel (top-right) -->
-<aside class="panel">
-  <div class="panel__header">
-    <div class="panel__title">Control Deck</div>
-    <div class="panel__indicator"></div>
-  </div>
-
-  <div class="section">
-    <div class="section__label">
-      <span>Morphology</span>
-      <span class="section__value" id="shape-value">SPHERE</span>
-    </div>
-    <div class="shape-grid" id="shape-grid"></div>
-  </div>
-
-  <div class="section">
-    <div class="section__label">
-      <span>Palette</span>
-      <span class="section__value" id="palette-value">AURORA</span>
-    </div>
-    <div class="palette-grid" id="palette-grid"></div>
-  </div>
-
-  <div class="section">
-    <div class="section__label">
-      <span>Density</span>
-      <span class="section__value" id="density-value">5000</span>
-    </div>
-    <div class="slider-wrap">
-      <input type="range" id="density" min="1500" max="15000" step="500" value="5000" />
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section__label">
-      <span>Particle Size</span>
-      <span class="section__value" id="size-value">0.040</span>
-    </div>
-    <div class="slider-wrap">
-      <input type="range" id="size" min="10" max="120" step="1" value="40" />
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section__label">
-      <span>Repel Field</span>
-      <span class="section__value" id="repel-value">1.00</span>
-    </div>
-    <div class="slider-wrap">
-      <input type="range" id="repel" min="0" max="200" step="1" value="100" />
-    </div>
-  </div>
-</aside>
 
 <!-- Hint strip -->
 <div class="hint">
@@ -491,6 +785,31 @@ const PALETTES = {
   lichen: { name: 'LICHEN', colors: ['#b6ff6e', '#2ee8a1', '#52d4d0'] },
   iris:   { name: 'IRIS',   colors: ['#7b61ff', '#5b8def', '#c084fc'] },
 };
+
+function hexToRgbTriplet(hex) {
+  let normalized = (hex || '').trim().replace('#', '');
+  if (normalized.length === 3) {
+    normalized = normalized.split('').map(ch => ch + ch).join('');
+  }
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return '255, 255, 255';
+  const value = parseInt(normalized, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `${r}, ${g}, ${b}`;
+}
+
+function applyPaletteTheme(name) {
+  const palette = PALETTES[name] || PALETTES.aurora;
+  const [c1, c2, c3] = palette.colors;
+  const root = document.documentElement;
+  root.style.setProperty('--accent', c1);
+  root.style.setProperty('--accent-2', c2);
+  root.style.setProperty('--accent-3', c3);
+  root.style.setProperty('--accent-rgb', hexToRgbTriplet(c1));
+  root.style.setProperty('--accent2-rgb', hexToRgbTriplet(c2));
+  root.style.setProperty('--accent3-rgb', hexToRgbTriplet(c3));
+}
 
 /* ============================================================
    §3  SHAPE GENERATORS
@@ -883,6 +1202,7 @@ renderer.setClearColor(0x030305, 1);
 
 const clock     = new THREE.Clock();
 const particles = new ParticleSystem(scene, CONFIG.count);
+const panelEl   = document.querySelector('.panel');
 
 // Drag-based orbit state (camera rotates around the particle field)
 const cameraOrbit = {
@@ -905,6 +1225,44 @@ let dragLastX = 0;
 let dragLastY = 0;
 let dragDistance = 0;
 let suppressNextClick = false;
+
+function resetPanelTilt() {
+  if (!panelEl) return;
+  panelEl.style.setProperty('--panel-tilt-x', '0deg');
+  panelEl.style.setProperty('--panel-tilt-y', '0deg');
+  panelEl.style.setProperty('--panel-shine-x', '50%');
+  panelEl.style.setProperty('--panel-shine-y', '35%');
+}
+
+function updatePanelTilt(x, y) {
+  if (!panelEl || window.innerWidth <= 760) {
+    resetPanelTilt();
+    return;
+  }
+
+  const rect = panelEl.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+
+  const px = (x - rect.left) / rect.width;
+  const py = (y - rect.top) / rect.height;
+
+  if (px < 0 || px > 1 || py < 0 || py > 1) {
+    panelEl.style.setProperty('--panel-tilt-x', '0deg');
+    panelEl.style.setProperty('--panel-tilt-y', '0deg');
+    return;
+  }
+
+  const tiltY = (px - 0.5) * 9;
+  const tiltX = (0.5 - py) * 7;
+  panelEl.style.setProperty('--panel-tilt-x', `${tiltX.toFixed(2)}deg`);
+  panelEl.style.setProperty('--panel-tilt-y', `${tiltY.toFixed(2)}deg`);
+  panelEl.style.setProperty('--panel-shine-x', `${(px * 100).toFixed(1)}%`);
+  panelEl.style.setProperty('--panel-shine-y', `${(py * 100).toFixed(1)}%`);
+}
+
+if (panelEl) {
+  panelEl.addEventListener('pointerleave', resetPanelTilt);
+}
 
 /* ============================================================
    §8  MOUSE / POINTER TRACKING
@@ -932,8 +1290,12 @@ function setMouse(x, y) {
 window.addEventListener('pointermove', e => {
   setMouse(e.clientX, e.clientY);
   updateCursor(e.clientX, e.clientY);
+  updatePanelTilt(e.clientX, e.clientY);
 });
-window.addEventListener('pointerleave', () => { mouseActive = false; });
+window.addEventListener('pointerleave', () => {
+  mouseActive = false;
+  resetPanelTilt();
+});
 
 canvas.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
@@ -1019,8 +1381,7 @@ function selectPalette(name) {
   const nice = PALETTES[name].name;
   document.getElementById('palette-value').textContent = nice;
   document.getElementById('palette-name').textContent  = nice;
-  // Accent color follows palette
-  document.documentElement.style.setProperty('--accent', PALETTES[name].colors[0]);
+  applyPaletteTheme(name);
 }
 
 /* ============================================================
@@ -1048,6 +1409,8 @@ Object.entries(PALETTES).forEach(([key, p]) => {
   btn.addEventListener('click', () => selectPalette(key));
   paletteGrid.appendChild(btn);
 });
+
+applyPaletteTheme(CONFIG.palette);
 
 const densityInput   = document.getElementById('density');
 const densityValue   = document.getElementById('density-value');
@@ -1127,6 +1490,7 @@ animate();
 // Remove loading overlay once first frame is rendered
 requestAnimationFrame(() => {
   document.getElementById('loading').classList.add('gone');
+  document.body.classList.add('ready');
 });
 
 /* ============================================================
@@ -1140,6 +1504,7 @@ window.addEventListener('resize', () => {
   const pr = Math.min(window.devicePixelRatio, 2);
   renderer.setPixelRatio(pr);
   particles.material.uniforms.uPixelRatio.value = pr;
+  if (w <= 760) resetPanelTilt();
 });
 
 /* ============================================================
