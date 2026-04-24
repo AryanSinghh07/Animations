@@ -173,6 +173,79 @@ body::after {
   pointer-events: none;
 }
 
+.quick-controls {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translate3d(0, 12px, 0);
+  transition: opacity 0.7s ease, transform 0.7s cubic-bezier(.2,.9,.2,1);
+}
+
+body.ready .quick-controls {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.zoom-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.quick-btn {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(135deg, rgba(13, 18, 30, 0.84), rgba(8, 11, 20, 0.70));
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: none;
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.35),
+    0 0 16px rgba(var(--accent2-rgb), 0.16),
+    inset 0 0 0 1px rgba(255,255,255,0.04);
+  transition:
+    transform 0.2s cubic-bezier(.2,.9,.2,1),
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease;
+}
+
+.quick-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 12px 24px rgba(0, 0, 0, 0.4),
+    0 0 24px rgba(var(--accent-rgb), 0.3),
+    inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+.quick-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.zoom-btn {
+  width: 42px;
+  height: 42px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.panel-toggle {
+  height: 40px;
+  padding: 0 14px;
+  font-size: 9px;
+}
+
 /* ============================================================
    4. CUSTOM CURSOR
    ============================================================ */
@@ -331,7 +404,7 @@ body.ready .hud {
   transform: perspective(1200px) rotateX(var(--panel-tilt-x)) rotateY(var(--panel-tilt-y));
   transform-origin: center center;
   transition:
-    transform 0.14s linear,
+    transform 0.2s cubic-bezier(.2,.9,.2,1),
     border-color 0.35s ease,
     box-shadow 0.35s ease,
     opacity 0.8s ease,
@@ -343,6 +416,13 @@ body.ready .hud {
 body.ready .panel {
   opacity: 1;
   filter: blur(0);
+}
+
+body.ready.panel-collapsed .panel {
+  opacity: 0;
+  filter: blur(10px);
+  pointer-events: none;
+  transform: perspective(1200px) translate3d(32px, 0, 0) rotateX(0deg) rotateY(0deg) scale(0.97);
 }
 
 .panel::before {
@@ -595,7 +675,7 @@ body.ready .hint {
 @media (max-width: 760px) {
   html, body { cursor: default; }
   .cursor { display: none; }
-  .shape-btn, .palette-btn, input[type=range] { cursor: pointer; }
+  .shape-btn, .palette-btn, input[type=range], .quick-btn { cursor: pointer; }
 
   .aurora { opacity: 0.46; }
   .scan-grid { opacity: 0.08; }
@@ -623,6 +703,24 @@ body.ready .hint {
     padding: 16px;
     --panel-tilt-x: 0deg;
     --panel-tilt-y: 0deg;
+  }
+
+  .quick-controls {
+    top: 12px;
+    right: 12px;
+    bottom: auto;
+    gap: 8px;
+  }
+
+  .zoom-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .panel-toggle {
+    height: 36px;
+    padding: 0 12px;
+    font-size: 8px;
   }
 
   .hint { display: none; }
@@ -740,11 +838,21 @@ body.ready .hint {
   </aside>
 </div>
 
+<div class="quick-controls" aria-label="Scene controls">
+  <div class="zoom-controls" role="group" aria-label="Zoom controls">
+    <button class="quick-btn zoom-btn" id="zoom-out" type="button" title="Zoom out">-</button>
+    <button class="quick-btn zoom-btn" id="zoom-in" type="button" title="Zoom in">+</button>
+  </div>
+  <button class="quick-btn panel-toggle" id="panel-toggle" type="button" aria-pressed="false" title="Hide control panel">Hide Panel</button>
+</div>
+
 <!-- Hint strip -->
 <div class="hint">
   <div>Click <span>morph</span></div>
   <div>Hover <span>repel</span></div>
   <div>Drag <span>rotate 3d</span></div>
+  <div>Wheel <span>zoom</span></div>
+  <div>Press C <span>panel</span></div>
 </div>
 
 <!-- Three.js via import map -->
@@ -767,7 +875,7 @@ const CONFIG = {
   sizeRaw:       40,          // slider raw value; /1000 for world-space size
   repelRaw:      100,         // slider raw value; /100 for strength multiplier
   repelRadius:   0.8,         // world-space radius of repel influence
-  morphLerp:     0.05,        // per-frame lerp toward target (smaller = slower, more elegant)
+  morphLerp:     0.04,        // base morph smoothing
   idleStrength:  0.06,        // amplitude of idle drift
   shape:         'sphere',
   palette:       'aurora',
@@ -1105,12 +1213,12 @@ class ParticleSystem {
   }
 
   /* Main update: morph-lerp + idle drift + mouse repulsion ---- */
-  update(time, mouseWorld, mouseActive) {
+  update(time, delta, mouseWorld, mouseActive) {
     const n            = this.count;
     const pos          = this.positions;
     const tgt          = this.targets;
     const seed         = this.seeds;
-    const lerp         = CONFIG.morphLerp;
+    const frameLerp    = 1 - Math.pow(1 - CONFIG.morphLerp, delta * 60);
     const idleS        = CONFIG.idleStrength;
     const repelRadius  = CONFIG.repelRadius;
     const repelStr     = CONFIG.repelRaw / 100;
@@ -1132,9 +1240,9 @@ class ParticleSystem {
       const fz = tgt[i3 + 2] + dz;
 
       // 3) Lerp current position toward final target
-      pos[i3]     += (fx - pos[i3])     * lerp;
-      pos[i3 + 1] += (fy - pos[i3 + 1]) * lerp;
-      pos[i3 + 2] += (fz - pos[i3 + 2]) * lerp;
+      pos[i3]     += (fx - pos[i3])     * frameLerp;
+      pos[i3 + 1] += (fy - pos[i3 + 1]) * frameLerp;
+      pos[i3 + 2] += (fz - pos[i3 + 2]) * frameLerp;
 
       // 4) MOUSE REPULSION: push particles away from pointer within radius
       if (mouseActive) {
@@ -1203,16 +1311,25 @@ renderer.setClearColor(0x030305, 1);
 const clock     = new THREE.Clock();
 const particles = new ParticleSystem(scene, CONFIG.count);
 const panelEl   = document.querySelector('.panel');
+const panelToggleBtn = document.getElementById('panel-toggle');
+const zoomInBtn = document.getElementById('zoom-in');
+const zoomOutBtn = document.getElementById('zoom-out');
 
 // Drag-based orbit state (camera rotates around the particle field)
 const cameraOrbit = {
   radius:      3.35,
+  targetRadius: 3.35,
+  minRadius:   2.0,
+  maxRadius:   5.8,
   yaw:         0,
   pitch:       0.06,
   targetYaw:   0,
   targetPitch: 0.06,
-  damping:     0.12,
-  dragSpeed:   0.005,
+  damping:     0.10,
+  zoomDamping: 0.10,
+  dragSpeed:   0.0044,
+  zoomStep:    0.26,
+  zoomSensitivity: 0.0018,
   minPitch:   -1.1,
   maxPitch:    1.1,
 };
@@ -1260,8 +1377,45 @@ function updatePanelTilt(x, y) {
   panelEl.style.setProperty('--panel-shine-y', `${(py * 100).toFixed(1)}%`);
 }
 
+function setPanelCollapsed(collapsed) {
+  document.body.classList.toggle('panel-collapsed', collapsed);
+  if (panelToggleBtn) {
+    panelToggleBtn.textContent = collapsed ? 'Show Panel' : 'Hide Panel';
+    panelToggleBtn.setAttribute('aria-pressed', String(collapsed));
+    panelToggleBtn.title = collapsed ? 'Show control panel' : 'Hide control panel';
+  }
+  if (collapsed) resetPanelTilt();
+}
+
+function setZoomTarget(radius) {
+  cameraOrbit.targetRadius = THREE.MathUtils.clamp(
+    radius,
+    cameraOrbit.minRadius,
+    cameraOrbit.maxRadius
+  );
+}
+
+function zoomStep(direction) {
+  setZoomTarget(cameraOrbit.targetRadius + direction * cameraOrbit.zoomStep);
+}
+
 if (panelEl) {
   panelEl.addEventListener('pointerleave', resetPanelTilt);
+}
+
+if (panelToggleBtn) {
+  panelToggleBtn.addEventListener('click', () => {
+    const isCollapsed = document.body.classList.contains('panel-collapsed');
+    setPanelCollapsed(!isCollapsed);
+  });
+}
+
+if (zoomInBtn) {
+  zoomInBtn.addEventListener('click', () => zoomStep(-1));
+}
+
+if (zoomOutBtn) {
+  zoomOutBtn.addEventListener('click', () => zoomStep(1));
 }
 
 /* ============================================================
@@ -1338,6 +1492,11 @@ function endDrag(e) {
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
 
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  setZoomTarget(cameraOrbit.targetRadius + e.deltaY * cameraOrbit.zoomSensitivity);
+}, { passive: false });
+
 /* ============================================================
    §9  CUSTOM CURSOR
    ============================================================ */
@@ -1383,6 +1542,25 @@ function selectPalette(name) {
   document.getElementById('palette-name').textContent  = nice;
   applyPaletteTheme(name);
 }
+
+window.addEventListener('keydown', e => {
+  if (e.repeat) return;
+
+  if (e.key === '+' || e.key === '=') {
+    zoomStep(-1);
+    return;
+  }
+
+  if (e.key === '-' || e.key === '_') {
+    zoomStep(1);
+    return;
+  }
+
+  if (e.key.toLowerCase() === 'c') {
+    const isCollapsed = document.body.classList.contains('panel-collapsed');
+    setPanelCollapsed(!isCollapsed);
+  }
+});
 
 /* ============================================================
    §11  BUILD UI (shape buttons, palette swatches, sliders)
@@ -1461,13 +1639,18 @@ function tickFps() {
    ============================================================ */
 function animate() {
   requestAnimationFrame(animate);
-  const t = clock.getElapsedTime();
+  const delta = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
 
   projectMouse();
 
   // Smoothly ease toward drag target for responsive but stable 3D control
-  cameraOrbit.yaw += (cameraOrbit.targetYaw - cameraOrbit.yaw) * cameraOrbit.damping;
-  cameraOrbit.pitch += (cameraOrbit.targetPitch - cameraOrbit.pitch) * cameraOrbit.damping;
+  const orbitEase = 1 - Math.pow(1 - cameraOrbit.damping, delta * 60);
+  const zoomEase = 1 - Math.pow(1 - cameraOrbit.zoomDamping, delta * 60);
+
+  cameraOrbit.yaw += (cameraOrbit.targetYaw - cameraOrbit.yaw) * orbitEase;
+  cameraOrbit.pitch += (cameraOrbit.targetPitch - cameraOrbit.pitch) * orbitEase;
+  cameraOrbit.radius += (cameraOrbit.targetRadius - cameraOrbit.radius) * zoomEase;
 
   const cp = Math.cos(cameraOrbit.pitch);
   camera.position.x = Math.sin(cameraOrbit.yaw) * cp * cameraOrbit.radius;
@@ -1480,7 +1663,7 @@ function animate() {
     mouseActive = false;
   }
 
-  particles.update(t, mouseWorld, mouseActive);
+  particles.update(t, delta, mouseWorld, mouseActive);
   renderer.render(scene, camera);
 
   tickFps();
