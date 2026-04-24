@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>3D Particle Morphing System</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000}
+  canvas{display:block;cursor:none}
+  #ui{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);
+    display:flex;gap:1rem;z-index:10;pointer-events:none}
+  .hint{color:rgba(255,220,140,0.55);font-family:'Segoe UI',sans-serif;
+    font-size:0.75rem;letter-spacing:0.12em;text-align:center;
+    padding:0.4rem 1rem;border:1px solid rgba(255,200,100,0.15);
+    border-radius:999px;background:rgba(0,0,0,0.4);
+    animation:pulse 3s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+  #morph-label{position:fixed;top:2rem;left:50%;transform:translateX(-50%);
+    color:rgba(255,210,130,0.0);font-family:'Segoe UI',sans-serif;
+    font-size:0.7rem;letter-spacing:0.3em;text-transform:uppercase;
+    transition:color 0.6s ease;pointer-events:none;z-index:10}
+  #morph-label.visible{color:rgba(255,210,130,0.6)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="morph-label">Morphing</div>
+<div id="ui">
+  <span class="hint">Move cursor · Hover to repel</span>
+  <span class="hint">Click or scroll to morph shape</span>
+</div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────
+const PARTICLE_COUNT = 6000;
+const FOV = 600;
+const IDLE_SPEED = 0.00018;
+const REPEL_RADIUS = 110;
+const REPEL_FORCE  = 0.7;
+const MORPH_SPEED  = 0.035;
+const IDLE_WANDER  = 0.0006;
+const DISPERSE_SPEED = 0.018;
+
+// Gold/Pink palette
+function particleColor(t) {
+  // t in [0,1]; blend gold ↔ rose-pink ↔ warm-white
+  const stops = [
+    [255, 200,  80],   // gold
+    [255, 160, 120],   // peach
+    [255, 120, 160],   // rose
+    [255, 230, 200],   // warm white
+  ];
+  const seg = (stops.length - 1) * t;
+  const i = Math.min(Math.floor(seg), stops.length - 2);
+  const f = seg - i;
+  const a = stops[i], b = stops[i+1];
+  return [
+    a[0] + (b[0]-a[0])*f,
+    a[1] + (b[1]-a[1])*f,
+    a[2] + (b[2]-a[2])*f
+  ];
+}
+
+// ─── SHAPE GENERATORS (3D point clouds) ───────────────────────
+
+/** Returns N 3D points for a tulip / floral shape */
+function tulipPoints(N) {
+  const pts = [];
+
+  // Petals (5 petals, each a parametric arch)
+  const petalCount = 5;
+  const petalPts = Math.floor(N * 0.65);
+  for (let i = 0; i < petalPts; i++) {
+    const t = i / petalPts;
+    const petal = Math.floor(t * petalCount);
+    const u = (t * petalCount) % 1; // 0..1 along petal
+    const angle = (petal / petalCount) * Math.PI * 2;
+    // Petal shape: extends outward and curves up
+    const spread = Math.sin(u * Math.PI) * 130;
+    const height = Math.sin(u * Math.PI) * 90 - 20;
+    const curl = Math.cos(u * Math.PI * 2) * 18;
+    const jitter = (Math.random()-0.5)*10;
+    const px = Math.cos(angle) * (spread + jitter);
+    const py = -height + curl + (Math.random()-0.5)*8;
+    const pz = Math.sin(angle) * (spread + jitter);
+    pts.push([px, py, pz]);
+  }
+
+  // Stem
+  const stemPts = Math.floor(N * 0.12);
+  for (let i = 0; i < stemPts; i++) {
+    const h = (i / stemPts) * 200;
+    pts.push([(Math.random()-0.5)*8, 80 + h, (Math.random()-0.5)*8]);
+  }
+
+  // Inner stamen / pistil
+  const stamenPts = Math.floor(N * 0.13);
+  for (let i = 0; i < stamenPts; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const r = Math.random() * 28;
+    const h = Math.random() * 60 - 40;
+    pts.push([Math.cos(theta)*r, h, Math.sin(theta)*r]);
+  }
+
+  // Leaves
+  const leafPts = N - pts.length;
+  for (let i = 0; i < leafPts; i++) {
+    const side = i < leafPts/2 ? 1 : -1;
+    const u = (i % (leafPts/2)) / (leafPts/2);
+    const leafLen = Math.sin(u * Math.PI) * 90;
+    const leafH = u * 120 + 80;
+    pts.push([side * leafLen + (Math.random()-0.5)*6,
+              leafH + (Math.random()-0.5)*5,
+              (Math.random()-0.5)*14]);
+  }
+  return pts;
+}
+
+/** Returns N 3D points for a hollow sphere */
+function spherePoints(N) {
+  const pts = [];
+  for (let i = 0; i < N; i++) {
+    const phi   = Math.acos(1 - 2 * Math.random());
+    const theta = 2 * Math.PI * Math.random();
+    const r = 160 + (Math.random()-0.5)*16;
+    pts.push([
+      r * Math.sin(phi) * Math.cos(theta),
+      r * Math.cos(phi),
+      r * Math.sin(phi) * Math.sin(theta)
+    ]);
+  }
+  return pts;
+}
+
+/** Returns N 3D points for a torus knot */
+function torusKnotPoints(N) {
+  const pts = [];
+  const p=2, q=3;
+  for (let i = 0; i < N; i++) {
+    const t = (i / N) * Math.PI * 2 * p;
+    const r = Math.cos(q * t / p) + 2.2;
+    const x = r * Math.cos(t) * 90;
+    const y = r * Math.sin(t) * 90;
+    const z = -Math.sin(q * t / p) * 90;
+    const jitter = (Math.random()-0.5)*8;
+    pts.push([x+jitter, y+jitter, z+jitter]);
+  }
+  return pts;
+}
+
+/** Icosphere-like dodecahedron shell */
+function dodecaPoints(N) {
+  const pts = [];
+  const phi = (1 + Math.sqrt(5)) / 2;
+  // icosahedron vertices expanded to many particles
+  for (let i = 0; i < N; i++) {
+    const lat = Math.asin(-1 + (2 * i / N));
+    const lon = Math.sqrt(N * Math.PI) * lat;
+    const r = 170;
+    pts.push([
+      r * Math.cos(lat) * Math.cos(lon),
+      r * Math.sin(lat),
+      r * Math.cos(lat) * Math.sin(lon)
+    ]);
+  }
+  return pts;
+}
+
+// ─── PARTICLE SYSTEM ─────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const label  = document.getElementById('morph-label');
+
+let W, H, cx, cy;
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  cx = W/2; cy = H/2;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Mouse
+let mx = cx, my = cy;
+canvas.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+
+// Particle data (flat arrays for perf)
+const px   = new Float32Array(PARTICLE_COUNT);  // world x
+const py   = new Float32Array(PARTICLE_COUNT);  // world y
+const pz   = new Float32Array(PARTICLE_COUNT);  // world z
+const pvx  = new Float32Array(PARTICLE_COUNT);  // vel x
+const pvy  = new Float32Array(PARTICLE_COUNT);  // vel y
+const pvz  = new Float32Array(PARTICLE_COUNT);  // vel z
+const ptx  = new Float32Array(PARTICLE_COUNT);  // target x
+const pty  = new Float32Array(PARTICLE_COUNT);  // target y
+const ptz  = new Float32Array(PARTICLE_COUNT);  // target z
+const pc   = new Float32Array(PARTICLE_COUNT);  // color t [0,1]
+const pseed= new Float32Array(PARTICLE_COUNT);  // noise seed
+
+const SHAPES = ['idle', 'tulip', 'sphere', 'torus', 'dodeca'];
+let shapeIdx = 0;
+let morphing = false;
+let morphT   = 0;
+let dispersing = false;
+
+function spawnIdle() {
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    px[i]  = (Math.random()-0.5)*700;
+    py[i]  = (Math.random()-0.5)*700;
+    pz[i]  = (Math.random()-0.5)*700;
+    pvx[i] = (Math.random()-0.5)*0.3;
+    pvy[i] = (Math.random()-0.5)*0.3;
+    pvz[i] = (Math.random()-0.5)*0.3;
+    pc[i]  = Math.random();
+    pseed[i]= Math.random()*1000;
+  }
+}
+spawnIdle();
+
+function assignTargets(shapeName) {
+  let cloud;
+  if      (shapeName === 'tulip')  cloud = tulipPoints(PARTICLE_COUNT);
+  else if (shapeName === 'sphere') cloud = spherePoints(PARTICLE_COUNT);
+  else if (shapeName === 'torus')  cloud = torusKnotPoints(PARTICLE_COUNT);
+  else if (shapeName === 'dodeca') cloud = dodecaPoints(PARTICLE_COUNT);
+  else return; // idle has no fixed target
+
+  // Simple nearest-particle assignment (shuffle for aesthetics)
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const j = Math.min(i, cloud.length - 1);
+    ptx[i] = cloud[j][0];
+    pty[i] = cloud[j][1];
+    ptz[i] = cloud[j][2];
+  }
+}
+
+function triggerMorph() {
+  shapeIdx = (shapeIdx + 1) % SHAPES.length;
+  const name = SHAPES[shapeIdx];
+  if (name === 'idle') {
+    dispersing = true;
+    morphing = false;
+    label.classList.remove('visible');
+    return;
+  }
+  dispersing = false;
+  morphing = true;
+  morphT = 0;
+  assignTargets(name);
+  label.classList.add('visible');
+  setTimeout(() => label.classList.remove('visible'), 2000);
+}
+
+canvas.addEventListener('click', triggerMorph);
+window.addEventListener('wheel', () => triggerMorph(), {passive:true});
+
+// ─── ROTATION STATE ─────────────────────────────────────────
+let rotX = 0, rotY = 0;
+let autoRotY = 0;
+
+// ─── 3D → 2D PROJECT ─────────────────────────────────────────
+function project(x, y, z) {
+  // Apply rotation Y
+  const cosY = Math.cos(autoRotY), sinY = Math.sin(autoRotY);
+  let rx = x*cosY + z*sinY;
+  let ry = y;
+  let rz = -x*sinY + z*cosY;
+  // Apply rotation X (tilt)
+  const cosX = Math.cos(0.18), sinX = Math.sin(0.18);
+  let ry2 = ry*cosX - rz*sinX;
+  let rz2 = ry*sinX + rz*cosX;
+  const scale = FOV / (FOV + rz2 + 400);
+  return [cx + rx*scale, cy + ry2*scale, scale, rz2];
+}
+
+// ─── MAIN LOOP ───────────────────────────────────────────────
+let last = 0;
+function frame(ts) {
+  const dt = Math.min(ts - last, 32);
+  last = ts;
+  autoRotY += IDLE_SPEED * dt;
+
+  ctx.clearRect(0,0,W,H);
+  // Deep radial background
+  const bg = ctx.createRadialGradient(cx,cy,0, cx,cy,Math.max(W,H)*0.7);
+  bg.addColorStop(0,'#0a0609'); bg.addColorStop(1,'#000000');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+
+  if (morphing) {
+    morphT = Math.min(morphT + MORPH_SPEED, 1);
+    if (morphT >= 1) morphing = false;
+  }
+
+  // 3D mouse repel: unproject mouse roughly
+  const mxW = mx - cx, myW = my - cy;
+
+  const sorted = [];
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    if (morphing) {
+      // Ease toward target
+      const ease = 1 - Math.pow(1 - morphT, 3);
+      px[i] += (ptx[i] - px[i]) * MORPH_SPEED * 1.4;
+      py[i] += (pty[i] - py[i]) * MORPH_SPEED * 1.4;
+      pz[i] += (ptz[i] - pz[i]) * MORPH_SPEED * 1.4;
+    } else if (dispersing) {
+      // Drift back to wander
+      px[i] += pvx[i] * 0.6;
+      py[i] += pvy[i] * 0.6;
+      pz[i] += pvz[i] * 0.6;
+      // Re-randomise velocity slowly
+      pvx[i] += (Math.random()-0.5) * IDLE_WANDER * dt;
+      pvy[i] += (Math.random()-0.5) * IDLE_WANDER * dt;
+      pvz[i] += (Math.random()-0.5) * IDLE_WANDER * dt;
+      // Dampen
+      pvx[i] *= 0.997; pvy[i] *= 0.997; pvz[i] *= 0.997;
+    } else {
+      // Idle wander
+      pvx[i] += (Math.random()-0.5) * IDLE_WANDER * dt;
+      pvy[i] += (Math.random()-0.5) * IDLE_WANDER * dt;
+      pvz[i] += (Math.random()-0.5) * IDLE_WANDER * dt;
+      pvx[i] *= 0.998; pvy[i] *= 0.998; pvz[i] *= 0.998;
+      px[i] += pvx[i]; py[i] += pvy[i]; pz[i] += pvz[i];
+      // Soft sphere boundary
+      const dist = Math.sqrt(px[i]*px[i]+py[i]*py[i]+pz[i]*pz[i]);
+      if (dist > 380) {
+        const inv = 1/dist;
+        px[i] -= px[i]*inv*0.8; py[i] -= py[i]*inv*0.8; pz[i] -= pz[i]*inv*0.8;
+      }
+    }
+
+    // Mouse repel (in 2D screen space after project)
+    const [sx, sy, sc] = project(px[i], py[i], pz[i]);
+    const ddx = sx - mx, ddy = sy - my;
+    const dd2 = ddx*ddx + ddy*ddy;
+    if (dd2 < REPEL_RADIUS*REPEL_RADIUS) {
+      const dd = Math.sqrt(dd2);
+      const force = (1 - dd/REPEL_RADIUS) * REPEL_FORCE;
+      pvx[i] += (ddx/dd) * force * 0.25;
+      pvy[i] += (ddy/dd) * force * 0.25;
+    }
+
+    sorted.push(i);
+  }
+
+  // Sort by Z for painter's algorithm
+  sorted.sort((a,b) => {
+    const za = pz[a] * Math.cos(autoRotY) - px[a] * Math.sin(autoRotY);
+    const zb = pz[b] * Math.cos(autoRotY) - px[b] * Math.sin(autoRotY);
+    return za - zb;
+  });
+
+  // Draw particles
+  for (let k = 0; k < sorted.length; k++) {
+    const i = sorted[k];
+    const [sx, sy, sc, rz] = project(px[i], py[i], pz[i]);
+    if (sx < -20 || sx > W+20 || sy < -20 || sy > H+20) continue;
+
+    const [r,g,b] = particleColor(pc[i]);
+    const alpha = Math.max(0.15, Math.min(1.0, sc * 2.2));
+    const radius = Math.max(0.5, sc * 2.4);
+
+    // Glow
+    const grad = ctx.createRadialGradient(sx,sy,0, sx,sy,radius*3.5);
+    grad.addColorStop(0, `rgba(${r|0},${g|0},${b|0},${(alpha*0.9).toFixed(3)})`);
+    grad.addColorStop(0.4, `rgba(${r|0},${g|0},${b|0},${(alpha*0.35).toFixed(3)})`);
+    grad.addColorStop(1, `rgba(${r|0},${g|0},${b|0},0)`);
+
+    ctx.beginPath();
+    ctx.arc(sx, sy, radius*3.5, 0, Math.PI*2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Core dot
+    ctx.beginPath();
+    ctx.arc(sx, sy, radius, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(255,240,220,${alpha.toFixed(3)})`;
+    ctx.fill();
+  }
+
+  // Custom cursor glow
+  const cursorGrad = ctx.createRadialGradient(mx,my,0, mx,my,28);
+  cursorGrad.addColorStop(0,'rgba(255,210,100,0.22)');
+  cursorGrad.addColorStop(0.5,'rgba(255,160,90,0.08)');
+  cursorGrad.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();
+  ctx.arc(mx,my,28,0,Math.PI*2);
+  ctx.fillStyle = cursorGrad;
+  ctx.fill();
+  // Cursor dot
+  ctx.beginPath();
+  ctx.arc(mx,my,3,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,220,150,0.9)';
+  ctx.fill();
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
