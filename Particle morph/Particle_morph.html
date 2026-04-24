@@ -450,7 +450,7 @@ input[type=range]::-moz-range-thumb {
 <div class="hint">
   <div>Click <span>morph</span></div>
   <div>Hover <span>repel</span></div>
-  <div>Scroll <span>cycle</span></div>
+  <div>Drag <span>rotate 3d</span></div>
 </div>
 
 <!-- Three.js via import map -->
@@ -884,6 +884,28 @@ renderer.setClearColor(0x030305, 1);
 const clock     = new THREE.Clock();
 const particles = new ParticleSystem(scene, CONFIG.count);
 
+// Drag-based orbit state (camera rotates around the particle field)
+const cameraOrbit = {
+  radius:      3.35,
+  yaw:         0,
+  pitch:       0.06,
+  targetYaw:   0,
+  targetPitch: 0.06,
+  damping:     0.12,
+  dragSpeed:   0.005,
+  minPitch:   -1.1,
+  maxPitch:    1.1,
+};
+
+let isDragging = false;
+let dragPointerId = null;
+let dragStartX = 0;
+let dragStartY = 0;
+let dragLastX = 0;
+let dragLastY = 0;
+let dragDistance = 0;
+let suppressNextClick = false;
+
 /* ============================================================
    §8  MOUSE / POINTER TRACKING
    Raycasts NDC cursor against z=0 plane to get world position.
@@ -913,6 +935,47 @@ window.addEventListener('pointermove', e => {
 });
 window.addEventListener('pointerleave', () => { mouseActive = false; });
 
+canvas.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  isDragging = true;
+  dragPointerId = e.pointerId;
+  dragStartX = dragLastX = e.clientX;
+  dragStartY = dragLastY = e.clientY;
+  dragDistance = 0;
+  canvas.setPointerCapture(e.pointerId);
+});
+
+canvas.addEventListener('pointermove', e => {
+  if (!isDragging || e.pointerId !== dragPointerId) return;
+
+  const dx = e.clientX - dragLastX;
+  const dy = e.clientY - dragLastY;
+  dragLastX = e.clientX;
+  dragLastY = e.clientY;
+
+  dragDistance += Math.abs(dx) + Math.abs(dy);
+
+  cameraOrbit.targetYaw   -= dx * cameraOrbit.dragSpeed;
+  cameraOrbit.targetPitch -= dy * cameraOrbit.dragSpeed;
+  cameraOrbit.targetPitch = THREE.MathUtils.clamp(
+    cameraOrbit.targetPitch,
+    cameraOrbit.minPitch,
+    cameraOrbit.maxPitch
+  );
+});
+
+function endDrag(e) {
+  if (!isDragging || e.pointerId !== dragPointerId) return;
+  isDragging = false;
+  canvas.releasePointerCapture(e.pointerId);
+  dragPointerId = null;
+  // Ignore click morph after a drag gesture
+  suppressNextClick = dragDistance > 6;
+}
+
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
 /* ============================================================
    §9  CUSTOM CURSOR
    ============================================================ */
@@ -922,22 +985,17 @@ function updateCursor(x, y) {
 }
 
 /* ============================================================
-   §10  INTERACTIONS: click to morph, wheel to cycle
+   §10  INTERACTIONS: click to morph, drag to rotate in 3D
    ============================================================ */
 canvas.addEventListener('click', () => {
+  if (suppressNextClick) {
+    suppressNextClick = false;
+    return;
+  }
   cycleShape(1);
   cursorEl.classList.add('active');
   setTimeout(() => cursorEl.classList.remove('active'), 450);
 });
-
-let wheelCooldown = 0;
-canvas.addEventListener('wheel', e => {
-  e.preventDefault();
-  const now = performance.now();
-  if (now - wheelCooldown < 380) return;
-  wheelCooldown = now;
-  cycleShape(e.deltaY > 0 ? 1 : -1);
-}, { passive: false });
 
 function cycleShape(dir) {
   const idx  = SHAPE_ORDER.indexOf(CONFIG.shape);
@@ -1044,9 +1102,14 @@ function animate() {
 
   projectMouse();
 
-  // Subtle cinematic camera sway — gives the scene a breathing quality
-  camera.position.x = Math.sin(t * 0.06) * 0.18;
-  camera.position.y = Math.sin(t * 0.05) * 0.10 + 0.15;
+  // Smoothly ease toward drag target for responsive but stable 3D control
+  cameraOrbit.yaw += (cameraOrbit.targetYaw - cameraOrbit.yaw) * cameraOrbit.damping;
+  cameraOrbit.pitch += (cameraOrbit.targetPitch - cameraOrbit.pitch) * cameraOrbit.damping;
+
+  const cp = Math.cos(cameraOrbit.pitch);
+  camera.position.x = Math.sin(cameraOrbit.yaw) * cp * cameraOrbit.radius;
+  camera.position.y = Math.sin(cameraOrbit.pitch) * cameraOrbit.radius;
+  camera.position.z = Math.cos(cameraOrbit.yaw) * cp * cameraOrbit.radius;
   camera.lookAt(0, 0, 0);
 
   // Auto-deactivate mouse repel after 2.5s of inactivity
