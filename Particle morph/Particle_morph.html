@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>PARTICLE.MORPH — Interactive 3D Particle Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+
+<style>
+/* ============================================================
+   1. RESET & DESIGN TOKENS
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:             #030305;
+  --panel:          rgba(10, 10, 14, 0.55);
+  --panel-border:   rgba(255, 255, 255, 0.08);
+  --panel-hairline: rgba(255, 255, 255, 0.05);
+  --text-primary:   #f5f5f7;
+  --text-secondary: rgba(245, 245, 247, 0.55);
+  --text-tertiary:  rgba(245, 245, 247, 0.30);
+  --accent:         #00e5ff;
+
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  cursor: none;
+}
+
+/* ============================================================
+   2. ATMOSPHERIC LAYERS
+   ============================================================ */
+.vignette {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 1;
+  background: radial-gradient(ellipse at center,
+              transparent 40%,
+              rgba(0, 0, 0, 0.65) 100%);
+}
+
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 2;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* ============================================================
+   3. CANVAS
+   ============================================================ */
+#canvas {
+  position: fixed; inset: 0;
+  display: block;
+  z-index: 0;
+}
+
+/* ============================================================
+   4. CUSTOM CURSOR
+   ============================================================ */
+.cursor {
+  position: fixed; top: 0; left: 0;
+  width: 30px; height: 30px;
+  margin: -15px 0 0 -15px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 100;
+  mix-blend-mode: difference;
+  transition:
+    width 0.25s cubic-bezier(.2,.9,.2,1),
+    height 0.25s cubic-bezier(.2,.9,.2,1),
+    margin 0.25s cubic-bezier(.2,.9,.2,1),
+    border-color 0.25s ease;
+}
+.cursor::before {
+  content: '';
+  position: absolute; top: 50%; left: 50%;
+  width: 2px; height: 2px;
+  margin: -1px 0 0 -1px;
+  background: #fff;
+  border-radius: 50%;
+}
+.cursor.active {
+  width: 70px; height: 70px;
+  margin: -35px 0 0 -35px;
+  border-color: var(--accent);
+}
+
+/* ============================================================
+   5. HUD (top-left readout)
+   ============================================================ */
+.hud {
+  position: fixed; top: 28px; left: 28px;
+  z-index: 10;
+  pointer-events: none;
+  display: flex; flex-direction: column;
+}
+
+.hud__mark {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 32px;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  color: var(--text-primary);
+}
+.hud__mark span { color: var(--accent); font-style: normal; }
+
+.hud__sub {
+  margin-top: 10px;
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.hud__data {
+  margin-top: 26px;
+  display: flex; flex-direction: column;
+  gap: 3px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+}
+.hud__data i {
+  font-style: normal;
+  color: var(--text-tertiary);
+  display: inline-block;
+  min-width: 72px;
+}
+.hud__data b {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* ============================================================
+   6. CONTROL PANEL (top-right, glass-morph)
+   ============================================================ */
+.panel {
+  position: fixed; top: 28px; right: 28px;
+  z-index: 10;
+  width: 308px;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  padding: 22px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 2px;
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.02) inset,
+    0 30px 60px rgba(0,0,0,0.5);
+}
+.panel::-webkit-scrollbar { width: 0; display: none; }
+
+.panel__header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--panel-hairline);
+  margin-bottom: 20px;
+}
+
+.panel__title {
+  font-size: 10px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.panel__indicator {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.85); }
+}
+
+.section { margin-bottom: 22px; }
+.section:last-child { margin-bottom: 0; }
+
+.section__label {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 9px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 12px;
+}
+.section__value {
+  color: var(--text-primary);
+  letter-spacing: 0.1em;
+  font-weight: 500;
+}
+
+/* Shape grid */
+.shape-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.shape-btn {
+  aspect-ratio: 1;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--panel-hairline);
+  border-radius: 2px;
+  cursor: none;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease,
+    transform 0.3s cubic-bezier(.2,.9,.2,1);
+}
+.shape-btn:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.22);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+.shape-btn.active {
+  background: rgba(0, 229, 255, 0.06);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+.shape-btn svg {
+  width: 22px; height: 22px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Palette */
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.palette-btn {
+  aspect-ratio: 1;
+  border: 1px solid var(--panel-hairline);
+  border-radius: 50%;
+  cursor: none;
+  position: relative;
+  transition: transform 0.2s cubic-bezier(.2,.9,.2,1), box-shadow 0.2s ease;
+}
+.palette-btn:hover {
+  transform: scale(1.15);
+}
+.palette-btn.active {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 3px rgba(255, 255, 255, 0.7);
+}
+
+/* Sliders */
+.slider-wrap { position: relative; padding: 6px 0; }
+
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+  outline: none;
+  cursor: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 10px; height: 10px;
+  background: var(--text-primary);
+  border-radius: 50%;
+  cursor: none;
+  transition: transform 0.2s ease, background 0.2s ease;
+  border: none;
+}
+input[type=range]::-webkit-slider-thumb:hover {
+  transform: scale(1.6);
+  background: var(--accent);
+}
+input[type=range]::-moz-range-thumb {
+  width: 10px; height: 10px;
+  background: var(--text-primary);
+  border-radius: 50%;
+  border: none;
+  cursor: none;
+}
+
+/* ============================================================
+   7. HINT STRIP (bottom)
+   ============================================================ */
+.hint {
+  position: fixed;
+  bottom: 28px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex; gap: 28px;
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+.hint span { color: var(--text-primary); font-weight: 500; }
+
+/* ============================================================
+   8. RESPONSIVE (mobile)
+   ============================================================ */
+@media (max-width: 760px) {
+  html, body { cursor: default; }
+  .cursor { display: none; }
+  .shape-btn, .palette-btn, input[type=range] { cursor: pointer; }
+
+  .hud { top: 14px; left: 14px; }
+  .hud__mark { font-size: 22px; }
+  .hud__sub { font-size: 8.5px; margin-top: 6px; }
+  .hud__data { margin-top: 14px; font-size: 9px; }
+  .hud__data i { min-width: 60px; }
+
+  .panel {
+    top: auto; right: 12px; left: 12px; bottom: 12px;
+    width: auto;
+    max-height: 52vh;
+    padding: 16px;
+  }
+  .hint { display: none; }
+}
+
+/* Loading state */
+.loading {
+  position: fixed; inset: 0;
+  z-index: 1000;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  transition: opacity 0.6s ease 0.2s, visibility 0s 0.8s;
+}
+.loading.gone { opacity: 0; visibility: hidden; }
+</style>
+</head>
+
+<body>
+
+<!-- Atmosphere -->
+<div class="vignette"></div>
+<canvas id="canvas"></canvas>
+<div class="cursor" id="cursor"></div>
+<div class="loading" id="loading">Initialising particle field…</div>
+
+<!-- HUD (top-left) -->
+<div class="hud">
+  <div class="hud__mark">particle<span>.</span>morph</div>
+  <div class="hud__sub">v1.0 · three.js particle engine</div>
+  <div class="hud__data">
+    <div><i>FPS</i> <b id="fps">--</b></div>
+    <div><i>COUNT</i> <b id="count">5000</b></div>
+    <div><i>SHAPE</i> <b id="shape-name">SPHERE</b></div>
+    <div><i>PALETTE</i> <b id="palette-name">AURORA</b></div>
+  </div>
+</div>
+
+<!-- Control panel (top-right) -->
+<aside class="panel">
+  <div class="panel__header">
+    <div class="panel__title">Control Deck</div>
+    <div class="panel__indicator"></div>
+  </div>
+
+  <div class="section">
+    <div class="section__label">
+      <span>Morphology</span>
+      <span class="section__value" id="shape-value">SPHERE</span>
+    </div>
+    <div class="shape-grid" id="shape-grid"></div>
+  </div>
+
+  <div class="section">
+    <div class="section__label">
+      <span>Palette</span>
+      <span class="section__value" id="palette-value">AURORA</span>
+    </div>
+    <div class="palette-grid" id="palette-grid"></div>
+  </div>
+
+  <div class="section">
+    <div class="section__label">
+      <span>Density</span>
+      <span class="section__value" id="density-value">5000</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="density" min="1500" max="15000" step="500" value="5000" />
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section__label">
+      <span>Particle Size</span>
+      <span class="section__value" id="size-value">0.040</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="size" min="10" max="120" step="1" value="40" />
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section__label">
+      <span>Repel Field</span>
+      <span class="section__value" id="repel-value">1.00</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="repel" min="0" max="200" step="1" value="100" />
+    </div>
+  </div>
+</aside>
+
+<!-- Hint strip -->
+<div class="hint">
+  <div>Click <span>morph</span></div>
+  <div>Hover <span>repel</span></div>
+  <div>Scroll <span>cycle</span></div>
+</div>
+
+<!-- Three.js via import map -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ============================================================
+   §1  CONFIGURATION
+   ============================================================ */
+const CONFIG = {
+  count:         5000,        // particle count
+  sizeRaw:       40,          // slider raw value; /1000 for world-space size
+  repelRaw:      100,         // slider raw value; /100 for strength multiplier
+  repelRadius:   0.8,         // world-space radius of repel influence
+  morphLerp:     0.05,        // per-frame lerp toward target (smaller = slower, more elegant)
+  idleStrength:  0.06,        // amplitude of idle drift
+  shape:         'sphere',
+  palette:       'aurora',
+};
+
+/* ============================================================
+   §2  PALETTES
+   Each is a 3-stop gradient; particles randomly sample the ramp.
+   ============================================================ */
+const PALETTES = {
+  aurora: { name: 'AURORA', colors: ['#00e5ff', '#5b8def', '#b14bff'] },
+  ember:  { name: 'EMBER',  colors: ['#ffc76b', '#ff6b3d', '#ff2154'] },
+  pearl:  { name: 'PEARL',  colors: ['#ffffff', '#d9d9d9', '#f3d68f'] },
+  bloom:  { name: 'BLOOM',  colors: ['#ff4d9e', '#ff86c2', '#ffc0dc'] },
+  lichen: { name: 'LICHEN', colors: ['#b6ff6e', '#2ee8a1', '#52d4d0'] },
+  iris:   { name: 'IRIS',   colors: ['#7b61ff', '#5b8def', '#c084fc'] },
+};
+
+/* ============================================================
+   §3  SHAPE GENERATORS
+   Each function writes an (x, y, z) target into the `out` array.
+   Called once per particle per shape switch.
+   ============================================================ */
+const SHAPES = {
+  /* Uniform distribution on sphere surface -------------------- */
+  sphere(out) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi   = Math.acos(2 * Math.random() - 1);
+    const r     = 1.2;
+    out[0] = r * Math.sin(phi) * Math.cos(theta);
+    out[1] = r * Math.sin(phi) * Math.sin(theta);
+    out[2] = r * Math.cos(phi);
+  },
+
+  /* Torus: (R + r·cosv)·cosu, r·sinv, (R + r·cosv)·sinu -------- */
+  torus(out) {
+    const R = 1.1, rad = 0.42;
+    const u = Math.random() * Math.PI * 2;
+    const v = Math.random() * Math.PI * 2;
+    out[0] = (R + rad * Math.cos(v)) * Math.cos(u);
+    out[1] =  rad * Math.sin(v);
+    out[2] = (R + rad * Math.cos(v)) * Math.sin(u);
+  },
+
+  /* 3D heart — parametric curve puffed around Y-axis ----------- */
+  heart(out) {
+    const u  = Math.random() * Math.PI * 2;
+    const s  = 0.055;
+    const hx = 16 * Math.pow(Math.sin(u), 3);
+    const hy = 13 * Math.cos(u) - 5 * Math.cos(2 * u)
+             -  2 * Math.cos(3 * u) -     Math.cos(4 * u);
+    // Fill interior with bias toward the outer curve
+    const fill  = Math.pow(Math.random(), 0.5);
+    const x     = hx * s * fill;
+    const y     = hy * s * fill + 0.2;
+    // 3D puffiness: sweep around Y axis for chunky heart
+    const angle = (Math.random() - 0.5) * Math.PI * 0.75;
+    out[0] = x * Math.cos(angle);
+    out[1] = y;
+    out[2] = x * Math.sin(angle);
+  },
+
+  /* Rose curve (rhodonea), 5 petals, with subtle 3D undulation */
+  flower(out) {
+    const k  = 5;                                   // petal count
+    const u  = Math.random() * Math.PI * 2;
+    const r  = Math.abs(Math.cos(k * u)) * 1.4;
+    const rr = r * Math.pow(Math.random(), 0.55);   // fill from 0 → r
+    const y  = (Math.random() - 0.5) * 0.08        // small random spread
+             + Math.sin(u * k) * 0.08;              // petal curl
+    out[0] = rr * Math.cos(u);
+    out[1] = y;
+    out[2] = rr * Math.sin(u);
+  },
+
+  /* Spiral galaxy — 4 logarithmic arms, flat disc with scatter */
+  galaxy(out) {
+    const arms  = 4;
+    const maxR  = 1.55;
+    const spin  = 1.7;
+    const arm   = Math.floor(Math.random() * arms);
+    const r     = Math.pow(Math.random(), 0.65) * maxR;
+    const armA  = (Math.PI * 2) / arms;
+    const noise = (Math.random() - 0.5) * 0.28;
+    const angle = arm * armA + r * spin + noise;
+    const yJit  = (Math.random() - 0.5) * 0.13 * (1 - r / maxR);
+    out[0] = Math.cos(angle) * r;
+    out[1] = yJit;
+    out[2] = Math.sin(angle) * r;
+  },
+
+  /* Double-helix DNA: two strands + rung particles ------------- */
+  helix(out) {
+    const turns  = 4;
+    const height = 2.6;
+    const radius = 0.52;
+    const p      = Math.random();
+
+    if (p < 0.45) {
+      // Strand A
+      const q = Math.random();
+      const s = q * turns * Math.PI * 2;
+      out[0] = Math.cos(s) * radius;
+      out[1] = q * height - height / 2;
+      out[2] = Math.sin(s) * radius;
+    } else if (p < 0.9) {
+      // Strand B (offset by π)
+      const q = Math.random();
+      const s = q * turns * Math.PI * 2 + Math.PI;
+      out[0] = Math.cos(s) * radius;
+      out[1] = q * height - height / 2;
+      out[2] = Math.sin(s) * radius;
+    } else {
+      // Ladder rungs
+      const q     = Math.floor(Math.random() * 32) / 32;
+      const along = Math.random();
+      const s     = q * turns * Math.PI * 2;
+      const x1    = Math.cos(s) * radius;
+      const z1    = Math.sin(s) * radius;
+      const x2    = Math.cos(s + Math.PI) * radius;
+      const z2    = Math.sin(s + Math.PI) * radius;
+      out[0] = x1 + (x2 - x1) * along;
+      out[1] = q * height - height / 2;
+      out[2] = z1 + (z2 - z1) * along;
+    }
+  },
+};
+
+const SHAPE_ORDER = ['sphere', 'torus', 'helix', 'galaxy', 'heart', 'flower'];
+const SHAPE_NAMES = {
+  sphere: 'SPHERE', torus: 'TORUS',   helix:  'HELIX',
+  galaxy: 'GALAXY', heart: 'HEART',   flower: 'FLOWER',
+};
+
+/* ============================================================
+   §4  SHAPE ICONS (inline SVG paths for buttons)
+   ============================================================ */
+const SHAPE_ICONS = {
+  sphere: '<circle cx="12" cy="12" r="7.5"/><ellipse cx="12" cy="12" rx="7.5" ry="2.5"/>',
+  torus:  '<ellipse cx="12" cy="12" rx="8" ry="3"/><ellipse cx="12" cy="12" rx="3" ry="1"/>',
+  heart:  '<path d="M12 19.5 C 5.5 14.5, 3 10.5, 6 7.5 C 9 4.5, 12 8, 12 8 C 12 8, 15 4.5, 18 7.5 C 21 10.5, 18.5 14.5, 12 19.5 Z"/>',
+  flower: '<circle cx="12" cy="6.5" r="3"/><circle cx="17.5" cy="12" r="3"/><circle cx="12" cy="17.5" r="3"/><circle cx="6.5" cy="12" r="3"/><circle cx="12" cy="12" r="1.8"/>',
+  galaxy: '<path d="M5 12 C 5 6, 19 6, 19 12 C 19 18, 5 18, 5 12 Z" opacity="0.35"/><path d="M12 6 C 16 8, 16 16, 12 18 M12 6 C 8 8, 8 16, 12 18"/><circle cx="12" cy="12" r="1.5"/>',
+  helix:  '<path d="M7 4 C 17 8, 17 16, 7 20"/><path d="M17 4 C 7 8, 7 16, 17 20"/><path d="M9 7 L 15 7 M9 12 L 15 12 M9 17 L 15 17" stroke-width="0.8" opacity="0.55"/>',
+};
+
+/* ============================================================
+   §5  PARTICLE SPRITE TEXTURE
+   Soft radial gradient → used in additive blending for glow.
+   ============================================================ */
+function createParticleTexture() {
+  const size   = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx    = canvas.getContext('2d');
+  const g      = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  g.addColorStop(0.0,  'rgba(255,255,255,1.0)');
+  g.addColorStop(0.2,  'rgba(255,255,255,0.75)');
+  g.addColorStop(0.5,  'rgba(255,255,255,0.15)');
+  g.addColorStop(1.0,  'rgba(255,255,255,0.0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/* ============================================================
+   §6  PARTICLE SYSTEM
+   Owns geometry, material, and per-frame position updates.
+   ============================================================ */
+class ParticleSystem {
+  constructor(scene, count) {
+    this.scene = scene;
+    this.count = count;
+    this._build();
+  }
+
+  /* Allocate buffers & build geometry/material ---------------- */
+  _build() {
+    const n = this.count;
+
+    // Typed-array buffers (reused across frames — no GC churn)
+    this.positions = new Float32Array(n * 3); // current rendered positions
+    this.targets   = new Float32Array(n * 3); // shape target positions
+    this.colors    = new Float32Array(n * 3); // per-particle color
+    this.sizes     = new Float32Array(n);     // per-particle size multiplier
+    this.seeds     = new Float32Array(n * 3); // noise seeds for idle drift
+
+    // Seed random data
+    for (let i = 0; i < n; i++) {
+      const i3 = i * 3;
+      this.seeds[i3]     = Math.random() * 1000;
+      this.seeds[i3 + 1] = Math.random() * 1000;
+      this.seeds[i3 + 2] = Math.random() * 1000;
+      this.sizes[i]      = 0.5 + Math.random() * 0.75; // 0.5 .. 1.25
+    }
+
+    // Initial chaotic cloud — morph will smoothly pull these into shape
+    for (let i = 0; i < n; i++) {
+      const i3    = i * 3;
+      const r     = Math.pow(Math.random(), 0.5) * 2.2;
+      const theta = Math.random() * Math.PI * 2;
+      const phi   = Math.acos(2 * Math.random() - 1);
+      this.positions[i3]     = r * Math.sin(phi) * Math.cos(theta);
+      this.positions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      this.positions[i3 + 2] = r * Math.cos(phi);
+    }
+
+    // BufferGeometry with custom attributes
+    this.geometry = new THREE.BufferGeometry();
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+    this.geometry.setAttribute('aColor',   new THREE.BufferAttribute(this.colors,    3));
+    this.geometry.setAttribute('aSize',    new THREE.BufferAttribute(this.sizes,     1));
+
+    // Point-sprite texture (created once per system)
+    this.texture = createParticleTexture();
+
+    // Custom shader material — additive blending for pure photonic glow
+    this.material = new THREE.ShaderMaterial({
+      uniforms: {
+        uSize:       { value: CONFIG.sizeRaw / 1000 },
+        uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+        uTexture:    { value: this.texture },
+        uTime:       { value: 0 },
+      },
+      vertexShader: /* glsl */`
+        attribute vec3  aColor;
+        attribute float aSize;
+        uniform   float uSize;
+        uniform   float uPixelRatio;
+        varying   vec3  vColor;
+
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_Position  = projectionMatrix * mv;
+          // Size attenuated by distance — closer = bigger (perspective-correct)
+          gl_PointSize = aSize * uSize * 900.0 * uPixelRatio / -mv.z;
+          vColor       = aColor;
+        }
+      `,
+      fragmentShader: /* glsl */`
+        uniform sampler2D uTexture;
+        varying vec3     vColor;
+
+        void main() {
+          vec4 tex = texture2D(uTexture, gl_PointCoord);
+          // Kill most transparent pixels for clean edges
+          if (tex.a < 0.02) discard;
+          // Hot core: small bright center that pushes color toward white
+          vec2  uv   = gl_PointCoord - 0.5;
+          float core = smoothstep(0.22, 0.0, length(uv));
+          vec3  col  = vColor + core * 0.35;
+          gl_FragColor = vec4(col, tex.a);
+        }
+      `,
+      transparent:   true,
+      depthWrite:    false,
+      depthTest:     true,
+      blending:      THREE.AdditiveBlending,
+    });
+
+    this.points = new THREE.Points(this.geometry, this.material);
+    this.scene.add(this.points);
+
+    // Populate initial shape & palette
+    this.setShape(CONFIG.shape);
+    this.setPalette(CONFIG.palette);
+  }
+
+  /* Generate new target positions for a named shape ----------- */
+  setShape(name) {
+    const gen = SHAPES[name] || SHAPES.sphere;
+    const tmp = [0, 0, 0];
+    const n   = this.count;
+    for (let i = 0; i < n; i++) {
+      gen(tmp);
+      const i3 = i * 3;
+      this.targets[i3]     = tmp[0];
+      this.targets[i3 + 1] = tmp[1];
+      this.targets[i3 + 2] = tmp[2];
+    }
+    CONFIG.shape = name;
+  }
+
+  /* Assign colors by random sampling the 3-stop palette ramp -- */
+  setPalette(name) {
+    const p   = PALETTES[name] || PALETTES.aurora;
+    const c1  = new THREE.Color(p.colors[0]);
+    const c2  = new THREE.Color(p.colors[1]);
+    const c3  = new THREE.Color(p.colors[2]);
+    const tmp = new THREE.Color();
+    const n   = this.count;
+    for (let i = 0; i < n; i++) {
+      const t  = Math.random();
+      if (t < 0.5) tmp.lerpColors(c1, c2, t * 2);
+      else         tmp.lerpColors(c2, c3, (t - 0.5) * 2);
+      const i3 = i * 3;
+      this.colors[i3]     = tmp.r;
+      this.colors[i3 + 1] = tmp.g;
+      this.colors[i3 + 2] = tmp.b;
+    }
+    this.geometry.attributes.aColor.needsUpdate = true;
+    CONFIG.palette = name;
+  }
+
+  setSize(raw) {
+    this.material.uniforms.uSize.value = raw / 1000;
+    CONFIG.sizeRaw = raw;
+  }
+
+  /* Main update: morph-lerp + idle drift + mouse repulsion ---- */
+  update(time, mouseWorld, mouseActive) {
+    const n            = this.count;
+    const pos          = this.positions;
+    const tgt          = this.targets;
+    const seed         = this.seeds;
+    const lerp         = CONFIG.morphLerp;
+    const idleS        = CONFIG.idleStrength;
+    const repelRadius  = CONFIG.repelRadius;
+    const repelStr     = CONFIG.repelRaw / 100;
+    const rr2          = repelRadius * repelRadius;
+    const mx = mouseWorld.x, my = mouseWorld.y, mz = mouseWorld.z;
+
+    for (let i = 0; i < n; i++) {
+      const i3 = i * 3;
+
+      // 1) IDLE DRIFT: gentle sinusoidal offset, per-particle phase seed
+      const sx = seed[i3], sy = seed[i3 + 1], sz = seed[i3 + 2];
+      const dx = Math.sin(time * 0.50 + sy) * idleS;
+      const dy = Math.cos(time * 0.42 + sz) * idleS;
+      const dz = Math.sin(time * 0.33 + sx) * idleS;
+
+      // 2) Final target = shape target + idle drift
+      const fx = tgt[i3]     + dx;
+      const fy = tgt[i3 + 1] + dy;
+      const fz = tgt[i3 + 2] + dz;
+
+      // 3) Lerp current position toward final target
+      pos[i3]     += (fx - pos[i3])     * lerp;
+      pos[i3 + 1] += (fy - pos[i3 + 1]) * lerp;
+      pos[i3 + 2] += (fz - pos[i3 + 2]) * lerp;
+
+      // 4) MOUSE REPULSION: push particles away from pointer within radius
+      if (mouseActive) {
+        const ex = pos[i3]     - mx;
+        const ey = pos[i3 + 1] - my;
+        const ez = pos[i3 + 2] - mz;
+        const d2 = ex*ex + ey*ey + ez*ez;
+        if (d2 < rr2 && d2 > 0.0001) {
+          const d     = Math.sqrt(d2);
+          const falloff = 1 - d / repelRadius;
+          const force = falloff * falloff * repelStr * 0.16;
+          pos[i3]     += (ex / d) * force;
+          pos[i3 + 1] += (ey / d) * force;
+          pos[i3 + 2] += (ez / d) * force;
+        }
+      }
+    }
+
+    this.geometry.attributes.position.needsUpdate = true;
+    this.material.uniforms.uTime.value = time;
+  }
+
+  /* Rebuild with new count (disposes old GPU resources) ------- */
+  rebuild(newCount) {
+    this.dispose();
+    this.count = newCount;
+    this._build();
+  }
+
+  /* WebGL memory management --------------------------------- */
+  dispose() {
+    this.scene.remove(this.points);
+    this.geometry.dispose();
+    this.material.dispose();
+    this.texture.dispose();
+  }
+}
+
+/* ============================================================
+   §7  SCENE SETUP
+   ============================================================ */
+const canvas = document.getElementById('canvas');
+
+const scene = new THREE.Scene();
+// Atmospheric fog gives depth to the particle field
+scene.fog = new THREE.FogExp2(0x030305, 0.09);
+
+const camera = new THREE.PerspectiveCamera(
+  55,                                          // fov
+  window.innerWidth / window.innerHeight,      // aspect
+  0.1, 100                                     // near/far
+);
+camera.position.set(0, 0.2, 3.3);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias:        true,
+  alpha:            false,
+  powerPreference:  'high-performance',
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x030305, 1);
+
+const clock     = new THREE.Clock();
+const particles = new ParticleSystem(scene, CONFIG.count);
+
+/* ============================================================
+   §8  MOUSE / POINTER TRACKING
+   Raycasts NDC cursor against z=0 plane to get world position.
+   ============================================================ */
+const mouseNDC   = new THREE.Vector2(-10, -10);
+const mouseWorld = new THREE.Vector3();
+const raycaster  = new THREE.Raycaster();
+const plane      = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+let mouseActive     = false;
+let mouseLastMoved  = 0;
+
+function projectMouse() {
+  raycaster.setFromCamera(mouseNDC, camera);
+  raycaster.ray.intersectPlane(plane, mouseWorld);
+}
+
+function setMouse(x, y) {
+  mouseNDC.x =   (x / window.innerWidth)  * 2 - 1;
+  mouseNDC.y = -((y / window.innerHeight) * 2 - 1);
+  mouseActive    = true;
+  mouseLastMoved = performance.now();
+}
+
+window.addEventListener('pointermove', e => {
+  setMouse(e.clientX, e.clientY);
+  updateCursor(e.clientX, e.clientY);
+});
+window.addEventListener('pointerleave', () => { mouseActive = false; });
+
+/* ============================================================
+   §9  CUSTOM CURSOR
+   ============================================================ */
+const cursorEl = document.getElementById('cursor');
+function updateCursor(x, y) {
+  cursorEl.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+}
+
+/* ============================================================
+   §10  INTERACTIONS: click to morph, wheel to cycle
+   ============================================================ */
+canvas.addEventListener('click', () => {
+  cycleShape(1);
+  cursorEl.classList.add('active');
+  setTimeout(() => cursorEl.classList.remove('active'), 450);
+});
+
+let wheelCooldown = 0;
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const now = performance.now();
+  if (now - wheelCooldown < 380) return;
+  wheelCooldown = now;
+  cycleShape(e.deltaY > 0 ? 1 : -1);
+}, { passive: false });
+
+function cycleShape(dir) {
+  const idx  = SHAPE_ORDER.indexOf(CONFIG.shape);
+  const next = (idx + dir + SHAPE_ORDER.length) % SHAPE_ORDER.length;
+  selectShape(SHAPE_ORDER[next]);
+}
+
+function selectShape(name) {
+  particles.setShape(name);
+  document.querySelectorAll('.shape-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.shape === name));
+  const nice = SHAPE_NAMES[name];
+  document.getElementById('shape-value').textContent = nice;
+  document.getElementById('shape-name').textContent  = nice;
+}
+
+function selectPalette(name) {
+  particles.setPalette(name);
+  document.querySelectorAll('.palette-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.palette === name));
+  const nice = PALETTES[name].name;
+  document.getElementById('palette-value').textContent = nice;
+  document.getElementById('palette-name').textContent  = nice;
+  // Accent color follows palette
+  document.documentElement.style.setProperty('--accent', PALETTES[name].colors[0]);
+}
+
+/* ============================================================
+   §11  BUILD UI (shape buttons, palette swatches, sliders)
+   ============================================================ */
+const shapeGrid = document.getElementById('shape-grid');
+SHAPE_ORDER.forEach(shape => {
+  const btn = document.createElement('button');
+  btn.className      = 'shape-btn' + (shape === CONFIG.shape ? ' active' : '');
+  btn.dataset.shape  = shape;
+  btn.innerHTML      = `
+    <svg viewBox="0 0 24 24">${SHAPE_ICONS[shape]}</svg>
+    <span>${SHAPE_NAMES[shape]}</span>`;
+  btn.addEventListener('click', () => selectShape(shape));
+  shapeGrid.appendChild(btn);
+});
+
+const paletteGrid = document.getElementById('palette-grid');
+Object.entries(PALETTES).forEach(([key, p]) => {
+  const btn = document.createElement('button');
+  btn.className         = 'palette-btn' + (key === CONFIG.palette ? ' active' : '');
+  btn.dataset.palette   = key;
+  btn.title             = p.name;
+  btn.style.background  = `linear-gradient(135deg, ${p.colors[0]}, ${p.colors[1]} 50%, ${p.colors[2]})`;
+  btn.addEventListener('click', () => selectPalette(key));
+  paletteGrid.appendChild(btn);
+});
+
+const densityInput   = document.getElementById('density');
+const densityValue   = document.getElementById('density-value');
+const countDisplay   = document.getElementById('count');
+let densityDebounce;
+densityInput.addEventListener('input', e => {
+  const v = parseInt(e.target.value);
+  densityValue.textContent = v;
+  countDisplay.textContent = v;
+  clearTimeout(densityDebounce);
+  // Debounce rebuild — avoids thrashing the GPU while the user drags
+  densityDebounce = setTimeout(() => particles.rebuild(v), 130);
+});
+
+const sizeInput  = document.getElementById('size');
+const sizeValue  = document.getElementById('size-value');
+sizeInput.addEventListener('input', e => {
+  const v = parseInt(e.target.value);
+  particles.setSize(v);
+  sizeValue.textContent = (v / 1000).toFixed(3);
+});
+
+const repelInput = document.getElementById('repel');
+const repelValue = document.getElementById('repel-value');
+repelInput.addEventListener('input', e => {
+  const v = parseInt(e.target.value);
+  CONFIG.repelRaw = v;
+  repelValue.textContent = (v / 100).toFixed(2);
+});
+
+/* ============================================================
+   §12  FPS COUNTER
+   ============================================================ */
+const fpsEl = document.getElementById('fps');
+let fpsFrames = 0, fpsLast = performance.now();
+function tickFps() {
+  fpsFrames++;
+  const now = performance.now();
+  if (now - fpsLast > 500) {
+    fpsEl.textContent = Math.round((fpsFrames * 1000) / (now - fpsLast));
+    fpsFrames = 0;
+    fpsLast   = now;
+  }
+}
+
+/* ============================================================
+   §13  ANIMATION LOOP  (requestAnimationFrame, 60fps target)
+   ============================================================ */
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  projectMouse();
+
+  // Subtle cinematic camera sway — gives the scene a breathing quality
+  camera.position.x = Math.sin(t * 0.06) * 0.18;
+  camera.position.y = Math.sin(t * 0.05) * 0.10 + 0.15;
+  camera.lookAt(0, 0, 0);
+
+  // Auto-deactivate mouse repel after 2.5s of inactivity
+  if (mouseActive && performance.now() - mouseLastMoved > 2500) {
+    mouseActive = false;
+  }
+
+  particles.update(t, mouseWorld, mouseActive);
+  renderer.render(scene, camera);
+
+  tickFps();
+}
+animate();
+
+// Remove loading overlay once first frame is rendered
+requestAnimationFrame(() => {
+  document.getElementById('loading').classList.add('gone');
+});
+
+/* ============================================================
+   §14  RESIZE HANDLER
+   ============================================================ */
+window.addEventListener('resize', () => {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  const pr = Math.min(window.devicePixelRatio, 2);
+  renderer.setPixelRatio(pr);
+  particles.material.uniforms.uPixelRatio.value = pr;
+});
+
+/* ============================================================
+   §15  CLEANUP ON UNLOAD
+   ============================================================ */
+window.addEventListener('beforeunload', () => {
+  particles.dispose();
+  renderer.dispose();
+});
+</script>
+</body>
+</html>
