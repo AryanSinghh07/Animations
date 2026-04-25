@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Antigravity Field</title>
+	<style>
+		:root {
+			--bg: #04050b;
+			--panel: rgba(11, 14, 25, 0.72);
+			--text: rgba(255, 255, 255, 0.9);
+			--text-dim: rgba(255, 255, 255, 0.58);
+			--accent: #ff9ffc;
+			--border: rgba(255, 255, 255, 0.12);
+		}
+
+		* {
+			box-sizing: border-box;
+			margin: 0;
+			padding: 0;
+		}
+
+		html,
+		body {
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+			background: radial-gradient(circle at 10% 0%, rgba(255, 159, 252, 0.16), transparent 45%), var(--bg);
+			color: var(--text);
+			font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+		}
+
+		#app {
+			width: 100%;
+			height: 100%;
+			display: block;
+		}
+
+		.hud {
+			position: fixed;
+			top: 18px;
+			left: 18px;
+			z-index: 10;
+			background: var(--panel);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			backdrop-filter: blur(10px);
+			padding: 10px 12px;
+			min-width: 250px;
+			line-height: 1.55;
+			user-select: none;
+		}
+
+		.hud h1 {
+			font-size: 14px;
+			margin-bottom: 4px;
+			font-weight: 600;
+			letter-spacing: 0.03em;
+		}
+
+		.hud p {
+			font-size: 12px;
+			color: var(--text-dim);
+		}
+
+		.hud code {
+			color: var(--accent);
+			font-family: Consolas, "Courier New", monospace;
+			font-size: 12px;
+		}
+
+		@media (max-width: 680px) {
+			.hud {
+				left: 12px;
+				right: 12px;
+				min-width: 0;
+			}
+		}
+	</style>
+</head>
+<body>
+	<canvas id="app"></canvas>
+
+	<div class="hud" aria-hidden="true">
+		<h1>Antigravity Field</h1>
+		<p>Move cursor near particles to pull them into orbit rings.</p>
+		<p>Config lives in <code>ANTIGRAVITY_CONFIG</code> inside this file.</p>
+	</div>
+
+	<script type="module">
+		import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+		/*
+			Equivalent of your React props.
+			Tweak these values to fit your project.
+		*/
+		const ANTIGRAVITY_CONFIG = {
+			count: 300,
+			magnetRadius: 10,
+			ringRadius: 10,
+			waveSpeed: 0.4,
+			waveAmplitude: 1,
+			particleSize: 2,
+			lerpSpeed: 0.1,
+			color: '#ff9ffc',
+			autoAnimate: false,
+			particleVariance: 1,
+			rotationSpeed: 0,
+			depthFactor: 1,
+			pulseSpeed: 3,
+			particleShape: 'capsule', // capsule | sphere | box | tetrahedron
+			fieldStrength: 10,
+		};
+
+		class Antigravity {
+			constructor(canvas, config = {}) {
+				this.canvas = canvas;
+				this.config = { ...ANTIGRAVITY_CONFIG, ...config };
+
+				this.scene = new THREE.Scene();
+				this.camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 500);
+				this.camera.position.set(0, 0, 50);
+
+				this.renderer = new THREE.WebGLRenderer({
+					canvas: this.canvas,
+					antialias: true,
+					alpha: false,
+					powerPreference: 'high-performance',
+				});
+				this.renderer.setSize(window.innerWidth, window.innerHeight);
+				this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+				this.renderer.setClearColor(0x04050b, 1);
+
+				this.dummy = new THREE.Object3D();
+				this.clock = new THREE.Clock();
+
+				this.lastMousePos = { x: 0, y: 0 };
+				this.lastMouseMoveTime = 0;
+				this.virtualMouse = { x: 0, y: 0 };
+				this.pointer = { x: 0, y: 0 };
+
+				this.viewport = this.getViewportAtDepth(0);
+				this.particles = this.createParticles();
+
+				this.mesh = this.createInstancedMesh();
+				this.scene.add(this.mesh);
+
+				this.onResize = this.onResize.bind(this);
+				this.onPointerMove = this.onPointerMove.bind(this);
+				this.onMouseLeave = this.onMouseLeave.bind(this);
+				this.onTouchMove = this.onTouchMove.bind(this);
+				this.onTouchEnd = this.onTouchEnd.bind(this);
+				this.animate = this.animate.bind(this);
+
+				this.attachEvents();
+				requestAnimationFrame(this.animate);
+			}
+
+			getViewportAtDepth(depth = 0) {
+				const distance = Math.abs(this.camera.position.z - depth);
+				const vFov = THREE.MathUtils.degToRad(this.camera.fov);
+				const height = 2 * Math.tan(vFov / 2) * distance;
+				const width = height * this.camera.aspect;
+				return { width, height };
+			}
+
+			createParticles() {
+				const items = [];
+				const width = this.viewport.width || 100;
+				const height = this.viewport.height || 100;
+
+				for (let i = 0; i < this.config.count; i++) {
+					const x = (Math.random() - 0.5) * width;
+					const y = (Math.random() - 0.5) * height;
+					const z = (Math.random() - 0.5) * 20;
+
+					items.push({
+						t: Math.random() * 100,
+						factor: 20 + Math.random() * 100,
+						speed: 0.01 + Math.random() / 200,
+						xFactor: -50 + Math.random() * 100,
+						yFactor: -50 + Math.random() * 100,
+						zFactor: -50 + Math.random() * 100,
+						mx: x,
+						my: y,
+						mz: z,
+						cx: x,
+						cy: y,
+						cz: z,
+						vx: 0,
+						vy: 0,
+						vz: 0,
+						randomRadiusOffset: (Math.random() - 0.5) * 2,
+					});
+				}
+
+				return items;
+			}
+
+			createGeometry() {
+				switch (this.config.particleShape) {
+					case 'sphere':
+						return new THREE.SphereGeometry(0.2, 16, 16);
+					case 'box':
+						return new THREE.BoxGeometry(0.3, 0.3, 0.3);
+					case 'tetrahedron':
+						return new THREE.TetrahedronGeometry(0.3);
+					case 'capsule':
+					default:
+						return new THREE.CapsuleGeometry(0.1, 0.4, 4, 8);
+				}
+			}
+
+			createInstancedMesh() {
+				const geometry = this.createGeometry();
+				const material = new THREE.MeshBasicMaterial({ color: this.config.color });
+				const mesh = new THREE.InstancedMesh(geometry, material, this.config.count);
+				mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+				return mesh;
+			}
+
+			attachEvents() {
+				window.addEventListener('resize', this.onResize);
+				window.addEventListener('mousemove', this.onPointerMove);
+				window.addEventListener('mouseleave', this.onMouseLeave);
+				window.addEventListener('touchmove', this.onTouchMove, { passive: true });
+				window.addEventListener('touchend', this.onTouchEnd, { passive: true });
+			}
+
+			onPointerMove(event) {
+				this.pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+				this.pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+			}
+
+			onMouseLeave() {
+				this.pointer.x = 999;
+				this.pointer.y = 999;
+			}
+
+			onTouchMove(event) {
+				if (event.touches.length < 1) return;
+				const t = event.touches[0];
+				this.pointer.x = (t.clientX / window.innerWidth) * 2 - 1;
+				this.pointer.y = -(t.clientY / window.innerHeight) * 2 + 1;
+			}
+
+			onTouchEnd() {
+				this.pointer.x = 999;
+				this.pointer.y = 999;
+			}
+
+			onResize() {
+				this.camera.aspect = window.innerWidth / window.innerHeight;
+				this.camera.updateProjectionMatrix();
+				this.renderer.setSize(window.innerWidth, window.innerHeight);
+				this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+				this.viewport = this.getViewportAtDepth(0);
+				this.particles = this.createParticles();
+			}
+
+			animate() {
+				const elapsed = this.clock.getElapsedTime();
+				const m = this.pointer;
+				const v = this.viewport;
+
+				const mouseDist = Math.hypot(m.x - this.lastMousePos.x, m.y - this.lastMousePos.y);
+				if (mouseDist > 0.001) {
+					this.lastMouseMoveTime = Date.now();
+					this.lastMousePos = { x: m.x, y: m.y };
+				}
+
+				let destX = (m.x * v.width) / 2;
+				let destY = (m.y * v.height) / 2;
+
+				if (this.config.autoAnimate && Date.now() - this.lastMouseMoveTime > 2000) {
+					destX = Math.sin(elapsed * 0.5) * (v.width / 4);
+					destY = Math.cos(elapsed * 0.5 * 2) * (v.height / 4);
+				}
+
+				const smoothFactor = 0.05;
+				this.virtualMouse.x += (destX - this.virtualMouse.x) * smoothFactor;
+				this.virtualMouse.y += (destY - this.virtualMouse.y) * smoothFactor;
+
+				const targetX = this.virtualMouse.x;
+				const targetY = this.virtualMouse.y;
+				const globalRotation = elapsed * this.config.rotationSpeed;
+
+				for (let i = 0; i < this.config.count; i++) {
+					const particle = this.particles[i];
+					particle.t += particle.speed / 2;
+
+					const t = particle.t;
+					const mx = particle.mx;
+					const my = particle.my;
+					const mz = particle.mz;
+					const cz = particle.cz;
+
+					const projectionFactor = 1 - cz / 50;
+					const projectedTargetX = targetX * projectionFactor;
+					const projectedTargetY = targetY * projectionFactor;
+
+					const dx = mx - projectedTargetX;
+					const dy = my - projectedTargetY;
+					const dist = Math.hypot(dx, dy);
+
+					const targetPos = {
+						x: mx,
+						y: my,
+						z: mz * this.config.depthFactor,
+					};
+
+					if (dist < this.config.magnetRadius) {
+						const angle = Math.atan2(dy, dx) + globalRotation;
+						const wave = Math.sin(t * this.config.waveSpeed + angle) * (0.5 * this.config.waveAmplitude);
+						const deviation = particle.randomRadiusOffset * (5 / (this.config.fieldStrength + 0.1));
+						const currentRingRadius = this.config.ringRadius + wave + deviation;
+
+						targetPos.x = projectedTargetX + currentRingRadius * Math.cos(angle);
+						targetPos.y = projectedTargetY + currentRingRadius * Math.sin(angle);
+						targetPos.z =
+							mz * this.config.depthFactor +
+							Math.sin(t) * (1 * this.config.waveAmplitude * this.config.depthFactor);
+					}
+
+					particle.cx += (targetPos.x - particle.cx) * this.config.lerpSpeed;
+					particle.cy += (targetPos.y - particle.cy) * this.config.lerpSpeed;
+					particle.cz += (targetPos.z - particle.cz) * this.config.lerpSpeed;
+
+					this.dummy.position.set(particle.cx, particle.cy, particle.cz);
+					this.dummy.lookAt(projectedTargetX, projectedTargetY, particle.cz);
+					this.dummy.rotateX(Math.PI / 2);
+
+					const currentDistToMouse = Math.hypot(
+						particle.cx - projectedTargetX,
+						particle.cy - projectedTargetY
+					);
+
+					const distFromRing = Math.abs(currentDistToMouse - this.config.ringRadius);
+					let scaleFactor = 1 - distFromRing / 10;
+					scaleFactor = Math.max(0, Math.min(1, scaleFactor));
+
+					const finalScale =
+						scaleFactor *
+						(0.8 + Math.sin(t * this.config.pulseSpeed) * 0.2 * this.config.particleVariance) *
+						this.config.particleSize;
+
+					this.dummy.scale.set(finalScale, finalScale, finalScale);
+					this.dummy.updateMatrix();
+					this.mesh.setMatrixAt(i, this.dummy.matrix);
+				}
+
+				this.mesh.instanceMatrix.needsUpdate = true;
+				this.renderer.render(this.scene, this.camera);
+				requestAnimationFrame(this.animate);
+			}
+
+			dispose() {
+				window.removeEventListener('resize', this.onResize);
+				window.removeEventListener('mousemove', this.onPointerMove);
+				window.removeEventListener('mouseleave', this.onMouseLeave);
+				window.removeEventListener('touchmove', this.onTouchMove);
+				window.removeEventListener('touchend', this.onTouchEnd);
+
+				this.mesh.geometry.dispose();
+				this.mesh.material.dispose();
+				this.renderer.dispose();
+			}
+		}
+
+		const canvas = document.getElementById('app');
+		const antigravity = new Antigravity(canvas, ANTIGRAVITY_CONFIG);
+
+		// Expose instance for debugging / runtime tweaks.
+		window.antigravity = antigravity;
+
+		window.addEventListener('beforeunload', () => {
+			antigravity.dispose();
+		});
+	</script>
+</body>
+</html>
