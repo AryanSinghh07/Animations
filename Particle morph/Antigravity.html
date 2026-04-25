@@ -3,15 +3,22 @@
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>Antigravity Field</title>
+	<title>Antigravity Bloom</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
 	<style>
 		:root {
-			--bg: #04050b;
-			--panel: rgba(11, 14, 25, 0.72);
-			--text: rgba(255, 255, 255, 0.9);
-			--text-dim: rgba(255, 255, 255, 0.58);
-			--accent: #ff9ffc;
-			--border: rgba(255, 255, 255, 0.12);
+			--mx: 50%;
+			--my: 50%;
+			--accent-rgb: 53, 232, 255;
+			--bg-deep: #071022;
+			--bg-mid: #12243e;
+			--bg-low: #060b15;
+			--text: rgba(248, 252, 255, 0.95);
+			--text-dim: rgba(232, 241, 255, 0.72);
+			--line: rgba(255, 255, 255, 0.16);
+			--panel: rgba(10, 18, 32, 0.48);
 		}
 
 		* {
@@ -25,75 +32,266 @@
 			width: 100%;
 			height: 100%;
 			overflow: hidden;
-			background: radial-gradient(circle at 10% 0%, rgba(255, 159, 252, 0.16), transparent 45%), var(--bg);
 			color: var(--text);
-			font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+			font-family: 'Sora', 'Segoe UI', sans-serif;
+			background:
+				radial-gradient(circle at var(--mx) var(--my), rgba(var(--accent-rgb), 0.18) 0%, rgba(var(--accent-rgb), 0.04) 20%, transparent 38%),
+				radial-gradient(80vmax 70vmax at 95% 110%, rgba(255, 153, 72, 0.24) 0%, transparent 56%),
+				radial-gradient(110vmax 90vmax at 8% -15%, rgba(90, 152, 255, 0.3) 0%, transparent 52%),
+				linear-gradient(160deg, var(--bg-mid) 0%, var(--bg-deep) 55%, var(--bg-low) 100%);
+		}
+
+		body::before {
+			content: '';
+			position: fixed;
+			inset: 0;
+			pointer-events: none;
+			z-index: 2;
+			background:
+				linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+				linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+			background-size: 64px 64px;
+			opacity: 0.44;
+			mix-blend-mode: screen;
+			animation: gridDrift 22s ease-in-out infinite;
+		}
+
+		body::after {
+			content: '';
+			position: fixed;
+			inset: 0;
+			pointer-events: none;
+			z-index: 4;
+			background: radial-gradient(circle at 50% 45%, rgba(0, 0, 0, 0) 28%, rgba(2, 4, 9, 0.72) 100%);
+		}
+
+		@keyframes gridDrift {
+			0%,
+			100% { transform: translate3d(0, 0, 0); }
+			50% { transform: translate3d(-16px, 12px, 0); }
 		}
 
 		#app {
+			position: fixed;
+			inset: 0;
 			width: 100%;
 			height: 100%;
 			display: block;
+			z-index: 1;
+		}
+
+		.atmo {
+			position: fixed;
+			inset: 0;
+			pointer-events: none;
+			z-index: 3;
+			background:
+				radial-gradient(35vmax 35vmax at 18% 12%, rgba(var(--accent-rgb), 0.24), transparent 64%),
+				radial-gradient(28vmax 28vmax at 83% 78%, rgba(255, 170, 84, 0.16), transparent 72%);
+			filter: blur(28px);
+			animation: atmoFloat 16s ease-in-out infinite alternate;
+		}
+
+		@keyframes atmoFloat {
+			from { transform: translate3d(0, 0, 0) scale(1); }
+			to { transform: translate3d(8px, -12px, 0) scale(1.04); }
 		}
 
 		.hud {
 			position: fixed;
-			top: 18px;
-			left: 18px;
 			z-index: 10;
-			background: var(--panel);
-			border: 1px solid var(--border);
-			border-radius: 12px;
-			backdrop-filter: blur(10px);
-			padding: 10px 12px;
-			min-width: 250px;
-			line-height: 1.55;
-			user-select: none;
+			backdrop-filter: blur(18px) saturate(1.22);
+			-webkit-backdrop-filter: blur(18px) saturate(1.22);
+			background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 35%, var(--panel) 100%);
+			border: 1px solid var(--line);
+			border-radius: 16px;
+			box-shadow:
+				0 16px 50px rgba(0, 0, 0, 0.38),
+				inset 0 1px 0 rgba(255, 255, 255, 0.28),
+				0 0 0 1px rgba(var(--accent-rgb), 0.12);
 		}
 
-		.hud h1 {
-			font-size: 14px;
-			margin-bottom: 4px;
+		.hud-main {
+			top: 20px;
+			left: 20px;
+			width: min(360px, calc(100vw - 40px));
+			padding: 16px 16px 14px;
+			animation: revealLeft 0.85s cubic-bezier(0.2, 0.68, 0.2, 1) both;
+		}
+
+		@keyframes revealLeft {
+			from {
+				opacity: 0;
+				transform: translate3d(-14px, 14px, 0);
+				filter: blur(8px);
+			}
+			to {
+				opacity: 1;
+				transform: translate3d(0, 0, 0);
+				filter: blur(0);
+			}
+		}
+
+		.hud-tag {
+			font-size: 10px;
 			font-weight: 600;
+			letter-spacing: 0.22em;
+			text-transform: uppercase;
+			color: rgba(var(--accent-rgb), 0.95);
+			font-family: 'Space Mono', monospace;
+			margin-bottom: 8px;
+		}
+
+		.hud-main h1 {
+			font-size: clamp(22px, 3.5vw, 30px);
+			line-height: 1.06;
+			letter-spacing: 0.01em;
+			font-weight: 700;
+			margin-bottom: 10px;
+		}
+
+		.hud-copy {
+			font-size: 13px;
+			color: var(--text-dim);
+			line-height: 1.55;
+			max-width: 36ch;
+		}
+
+		.hud-stats {
+			margin-top: 14px;
+			display: grid;
+			gap: 8px;
+		}
+
+		.stat-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			border-top: 1px solid rgba(255, 255, 255, 0.1);
+			padding-top: 8px;
+			font-size: 12px;
 			letter-spacing: 0.03em;
 		}
 
-		.hud p {
-			font-size: 12px;
-			color: var(--text-dim);
+		.stat-row span {
+			color: rgba(238, 247, 255, 0.7);
+			text-transform: uppercase;
+			font-size: 11px;
+			letter-spacing: 0.16em;
+			font-family: 'Space Mono', monospace;
 		}
 
-		.hud code {
-			color: var(--accent);
-			font-family: Consolas, "Courier New", monospace;
+		.stat-row strong {
+			color: rgb(var(--accent-rgb));
+			font-family: 'Space Mono', monospace;
+			font-weight: 700;
 			font-size: 12px;
+			text-shadow: 0 0 18px rgba(var(--accent-rgb), 0.45);
+		}
+
+		.hud-tip {
+			left: 50%;
+			bottom: 20px;
+			transform: translateX(-50%);
+			padding: 10px 14px;
+			font-size: 11px;
+			color: rgba(240, 248, 255, 0.78);
+			letter-spacing: 0.12em;
+			text-transform: uppercase;
+			font-family: 'Space Mono', monospace;
+			animation: revealBottom 0.85s cubic-bezier(0.2, 0.68, 0.2, 1) both;
+			animation-delay: 0.08s;
+			white-space: nowrap;
+		}
+
+		@keyframes revealBottom {
+			from {
+				opacity: 0;
+				transform: translateX(-50%) translateY(14px);
+				filter: blur(8px);
+			}
+			to {
+				opacity: 1;
+				transform: translateX(-50%) translateY(0);
+				filter: blur(0);
+			}
+		}
+
+		.cursor-ring {
+			position: fixed;
+			left: 50%;
+			top: 50%;
+			width: 38px;
+			height: 38px;
+			border-radius: 50%;
+			border: 1px solid rgba(var(--accent-rgb), 0.86);
+			box-shadow:
+				0 0 20px rgba(var(--accent-rgb), 0.34),
+				inset 0 0 18px rgba(var(--accent-rgb), 0.2);
+			pointer-events: none;
+			z-index: 12;
+			transform: translate(-50%, -50%);
+			opacity: 0;
+			transition:
+				opacity 0.22s ease,
+				width 0.2s ease,
+				height 0.2s ease,
+				border-color 0.2s ease;
+		}
+
+		@media (max-width: 900px) {
+			.hud-main {
+				width: min(330px, calc(100vw - 24px));
+				left: 12px;
+				top: 12px;
+			}
+
+			.hud-tip {
+				left: 12px;
+				right: 12px;
+				bottom: 12px;
+				transform: none;
+				white-space: normal;
+				text-align: center;
+			}
 		}
 
 		@media (max-width: 680px) {
-			.hud {
-				left: 12px;
-				right: 12px;
-				min-width: 0;
+			.cursor-ring {
+				display: none;
+			}
+
+			.hud-main {
+				padding: 12px;
+			}
+
+			.hud-copy {
+				font-size: 12px;
 			}
 		}
 	</style>
 </head>
 <body>
 	<canvas id="app"></canvas>
+	<div class="atmo" aria-hidden="true"></div>
+	<div class="cursor-ring" id="cursorRing" aria-hidden="true"></div>
 
-	<div class="hud" aria-hidden="true">
-		<h1>Antigravity Field</h1>
-		<p>Move cursor near particles to pull them into orbit rings.</p>
-		<p>Config lives in <code>ANTIGRAVITY_CONFIG</code> inside this file.</p>
+	<div class="hud hud-main">
+		<p class="hud-tag">Kinetic Study 07</p>
+		<h1>Antigravity Bloom</h1>
+		<p class="hud-copy">Move your cursor near particles to bend them into living orbit rings. Press A to toggle auto choreography.</p>
+		<div class="hud-stats">
+			<div class="stat-row"><span>Shape</span><strong id="shapeValue">capsule</strong></div>
+			<div class="stat-row"><span>Particles</span><strong id="countValue">300</strong></div>
+			<div class="stat-row"><span>Mode</span><strong id="modeValue">pointer</strong></div>
+		</div>
 	</div>
+
+	<div class="hud hud-tip">Move pointer or touch | Press A for auto mode</div>
 
 	<script type="module">
 		import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
-		/*
-			Equivalent of your React props.
-			Tweak these values to fit your project.
-		*/
 		const ANTIGRAVITY_CONFIG = {
 			count: 300,
 			magnetRadius: 10,
@@ -102,34 +300,59 @@
 			waveAmplitude: 1,
 			particleSize: 2,
 			lerpSpeed: 0.1,
-			color: '#ff9ffc',
+			color: '#35e8ff',
 			autoAnimate: false,
 			particleVariance: 1,
 			rotationSpeed: 0,
 			depthFactor: 1,
 			pulseSpeed: 3,
-			particleShape: 'capsule', // capsule | sphere | box | tetrahedron
+			particleShape: 'capsule',
 			fieldStrength: 10,
 		};
+
+		function hexToRgb(hex) {
+			const clean = (hex || '').replace('#', '').trim();
+			if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(clean)) return null;
+
+			const normalized = clean.length === 3
+				? clean.split('').map(ch => ch + ch).join('')
+				: clean;
+
+			const value = parseInt(normalized, 16);
+			return {
+				r: (value >> 16) & 255,
+				g: (value >> 8) & 255,
+				b: value & 255,
+			};
+		}
 
 		class Antigravity {
 			constructor(canvas, config = {}) {
 				this.canvas = canvas;
 				this.config = { ...ANTIGRAVITY_CONFIG, ...config };
 
+				this.cursorRing = document.getElementById('cursorRing');
+				this.shapeValueEl = document.getElementById('shapeValue');
+				this.countValueEl = document.getElementById('countValue');
+				this.modeValueEl = document.getElementById('modeValue');
+
 				this.scene = new THREE.Scene();
+				this.scene.fog = new THREE.Fog(0x071022, 48, 140);
 				this.camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 500);
 				this.camera.position.set(0, 0, 50);
 
 				this.renderer = new THREE.WebGLRenderer({
 					canvas: this.canvas,
 					antialias: true,
-					alpha: false,
+					alpha: true,
 					powerPreference: 'high-performance',
 				});
 				this.renderer.setSize(window.innerWidth, window.innerHeight);
 				this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-				this.renderer.setClearColor(0x04050b, 1);
+				this.renderer.setClearColor(0x000000, 0);
+				this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+				this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+				this.renderer.toneMappingExposure = 1.08;
 
 				this.dummy = new THREE.Object3D();
 				this.clock = new THREE.Clock();
@@ -145,15 +368,34 @@
 				this.mesh = this.createInstancedMesh();
 				this.scene.add(this.mesh);
 
+				this.createLighting();
+				this.createStarField();
+
+				this.applyAccentTheme();
+				this.applyHudState();
+
 				this.onResize = this.onResize.bind(this);
 				this.onPointerMove = this.onPointerMove.bind(this);
 				this.onMouseLeave = this.onMouseLeave.bind(this);
 				this.onTouchMove = this.onTouchMove.bind(this);
 				this.onTouchEnd = this.onTouchEnd.bind(this);
+				this.onKeyDown = this.onKeyDown.bind(this);
 				this.animate = this.animate.bind(this);
 
 				this.attachEvents();
 				requestAnimationFrame(this.animate);
+			}
+
+			applyAccentTheme() {
+				const rgb = hexToRgb(this.config.color);
+				if (!rgb) return;
+				document.documentElement.style.setProperty('--accent-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+			}
+
+			applyHudState() {
+				if (this.shapeValueEl) this.shapeValueEl.textContent = this.config.particleShape;
+				if (this.countValueEl) this.countValueEl.textContent = String(this.config.count);
+				if (this.modeValueEl) this.modeValueEl.textContent = this.config.autoAnimate ? 'auto' : 'pointer';
 			}
 
 			getViewportAtDepth(depth = 0) {
@@ -213,10 +455,62 @@
 
 			createInstancedMesh() {
 				const geometry = this.createGeometry();
-				const material = new THREE.MeshBasicMaterial({ color: this.config.color });
+				const baseColor = new THREE.Color(this.config.color);
+				const material = new THREE.MeshStandardMaterial({
+					color: baseColor,
+					emissive: baseColor.clone().multiplyScalar(0.42),
+					emissiveIntensity: 1,
+					roughness: 0.24,
+					metalness: 0.34,
+				});
+
 				const mesh = new THREE.InstancedMesh(geometry, material, this.config.count);
 				mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 				return mesh;
+			}
+
+			createLighting() {
+				this.ambientLight = new THREE.AmbientLight(0x8db7ff, 0.38);
+				this.keyLight = new THREE.PointLight(0x59dcff, 1.45, 220, 1.8);
+				this.keyLight.position.set(0, 0, 36);
+				this.fillLight = new THREE.PointLight(0xffad75, 1.05, 180, 2.1);
+				this.fillLight.position.set(-22, -6, 26);
+				this.rimLight = new THREE.PointLight(0xc5e6ff, 0.72, 180, 2.4);
+				this.rimLight.position.set(20, 14, 38);
+
+				this.scene.add(this.ambientLight, this.keyLight, this.fillLight, this.rimLight);
+			}
+
+			createStarField() {
+				const starCount = 900;
+				const positions = new Float32Array(starCount * 3);
+
+				for (let i = 0; i < starCount; i++) {
+					const i3 = i * 3;
+					const theta = Math.random() * Math.PI * 2;
+					const u = Math.random() * 2 - 1;
+					const s = Math.sqrt(1 - u * u);
+					const radius = 55 + Math.random() * 85;
+
+					positions[i3] = radius * s * Math.cos(theta);
+					positions[i3 + 1] = radius * u;
+					positions[i3 + 2] = radius * s * Math.sin(theta);
+				}
+
+				const starGeometry = new THREE.BufferGeometry();
+				starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+				const starMaterial = new THREE.PointsMaterial({
+					color: 0xd8eeff,
+					size: 0.16,
+					transparent: true,
+					opacity: 0.6,
+					blending: THREE.AdditiveBlending,
+					depthWrite: false,
+				});
+
+				this.starField = new THREE.Points(starGeometry, starMaterial);
+				this.scene.add(this.starField);
 			}
 
 			attachEvents() {
@@ -225,16 +519,37 @@
 				window.addEventListener('mouseleave', this.onMouseLeave);
 				window.addEventListener('touchmove', this.onTouchMove, { passive: true });
 				window.addEventListener('touchend', this.onTouchEnd, { passive: true });
+				window.addEventListener('keydown', this.onKeyDown);
+			}
+
+			onKeyDown(event) {
+				if (event.key.toLowerCase() !== 'a') return;
+				this.config.autoAnimate = !this.config.autoAnimate;
+				this.applyHudState();
 			}
 
 			onPointerMove(event) {
 				this.pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
 				this.pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+				document.documentElement.style.setProperty('--mx', `${(event.clientX / window.innerWidth) * 100}%`);
+				document.documentElement.style.setProperty('--my', `${(event.clientY / window.innerHeight) * 100}%`);
+
+				if (!this.cursorRing) return;
+
+				const speed = Math.min(24, Math.hypot(event.movementX || 0, event.movementY || 0));
+				const size = 38 + speed * 0.7;
+				this.cursorRing.style.opacity = '1';
+				this.cursorRing.style.left = `${event.clientX}px`;
+				this.cursorRing.style.top = `${event.clientY}px`;
+				this.cursorRing.style.width = `${size}px`;
+				this.cursorRing.style.height = `${size}px`;
 			}
 
 			onMouseLeave() {
 				this.pointer.x = 999;
 				this.pointer.y = 999;
+				if (this.cursorRing) this.cursorRing.style.opacity = '0';
 			}
 
 			onTouchMove(event) {
@@ -242,6 +557,8 @@
 				const t = event.touches[0];
 				this.pointer.x = (t.clientX / window.innerWidth) * 2 - 1;
 				this.pointer.y = -(t.clientY / window.innerHeight) * 2 + 1;
+				document.documentElement.style.setProperty('--mx', `${(t.clientX / window.innerWidth) * 100}%`);
+				document.documentElement.style.setProperty('--my', `${(t.clientY / window.innerHeight) * 100}%`);
 			}
 
 			onTouchEnd() {
@@ -275,7 +592,7 @@
 
 				if (this.config.autoAnimate && Date.now() - this.lastMouseMoveTime > 2000) {
 					destX = Math.sin(elapsed * 0.5) * (v.width / 4);
-					destY = Math.cos(elapsed * 0.5 * 2) * (v.height / 4);
+					destY = Math.cos(elapsed) * (v.height / 4);
 				}
 
 				const smoothFactor = 0.05;
@@ -320,7 +637,7 @@
 						targetPos.y = projectedTargetY + currentRingRadius * Math.sin(angle);
 						targetPos.z =
 							mz * this.config.depthFactor +
-							Math.sin(t) * (1 * this.config.waveAmplitude * this.config.depthFactor);
+							Math.sin(t) * (this.config.waveAmplitude * this.config.depthFactor);
 					}
 
 					particle.cx += (targetPos.x - particle.cx) * this.config.lerpSpeed;
@@ -351,6 +668,24 @@
 				}
 
 				this.mesh.instanceMatrix.needsUpdate = true;
+
+				const targetLightX = THREE.MathUtils.clamp(targetX * 1.6, -32, 32);
+				const targetLightY = THREE.MathUtils.clamp(targetY * 1.6, -20, 20);
+				this.keyLight.position.x += (targetLightX - this.keyLight.position.x) * 0.08;
+				this.keyLight.position.y += (targetLightY - this.keyLight.position.y) * 0.08;
+				this.keyLight.intensity = 1.35 + Math.sin(elapsed * 2.1) * 0.18;
+
+				this.rimLight.intensity = 0.64 + Math.sin(elapsed * 1.3) * 0.1;
+
+				if (this.starField) {
+					this.starField.rotation.y += 0.00055;
+					this.starField.rotation.x = Math.sin(elapsed * 0.09) * 0.12;
+				}
+
+				this.camera.position.x = Math.sin(elapsed * 0.14) * 1.25;
+				this.camera.position.y = Math.cos(elapsed * 0.17) * 0.9;
+				this.camera.lookAt(0, 0, 0);
+
 				this.renderer.render(this.scene, this.camera);
 				requestAnimationFrame(this.animate);
 			}
@@ -361,6 +696,12 @@
 				window.removeEventListener('mouseleave', this.onMouseLeave);
 				window.removeEventListener('touchmove', this.onTouchMove);
 				window.removeEventListener('touchend', this.onTouchEnd);
+				window.removeEventListener('keydown', this.onKeyDown);
+
+				if (this.starField) {
+					this.starField.geometry.dispose();
+					this.starField.material.dispose();
+				}
 
 				this.mesh.geometry.dispose();
 				this.mesh.material.dispose();
@@ -370,8 +711,6 @@
 
 		const canvas = document.getElementById('app');
 		const antigravity = new Antigravity(canvas, ANTIGRAVITY_CONFIG);
-
-		// Expose instance for debugging / runtime tweaks.
 		window.antigravity = antigravity;
 
 		window.addEventListener('beforeunload', () => {
