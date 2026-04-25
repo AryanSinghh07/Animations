@@ -15,6 +15,7 @@
 			margin: 0;
 			overflow: hidden;
 			background: #050507;
+			font-family: 'IBM Plex Mono', monospace;
 		}
 
 		.ascii-text-container {
@@ -24,7 +25,40 @@
 			height: 100%;
 			overflow: hidden;
 			touch-action: none;
-			background: radial-gradient(circle at 50% 20%, #11151f 0%, #090b11 45%, #050507 100%);
+			display: grid;
+			place-items: center;
+			background:
+				radial-gradient(70vmax 70vmax at 50% 28%, rgba(255, 158, 110, 0.2) 0%, rgba(255, 158, 110, 0) 52%),
+				radial-gradient(80vmax 80vmax at 12% -12%, rgba(255, 97, 136, 0.24) 0%, rgba(255, 97, 136, 0) 52%),
+				radial-gradient(90vmax 90vmax at 92% 110%, rgba(255, 216, 102, 0.2) 0%, rgba(255, 216, 102, 0) 48%),
+				linear-gradient(180deg, #111423 0%, #0a0d16 45%, #06070d 100%);
+		}
+
+		.ascii-text-container::before {
+			content: '';
+			position: absolute;
+			inset: 0;
+			pointer-events: none;
+			background:
+				linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+				linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+			background-size: 54px 54px;
+			opacity: 0.28;
+			animation: gridPulse 14s ease-in-out infinite;
+		}
+
+		.ascii-text-container::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			pointer-events: none;
+			background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.62) 100%);
+		}
+
+		@keyframes gridPulse {
+			0%,
+			100% { opacity: 0.2; transform: translate3d(0, 0, 0); }
+			50% { opacity: 0.34; transform: translate3d(-10px, 6px, 0); }
 		}
 
 		.ascii-text-container canvas {
@@ -33,6 +67,7 @@
 			top: 0;
 			width: 100%;
 			height: 100%;
+			z-index: 1;
 			image-rendering: optimizeSpeed;
 			image-rendering: -moz-crisp-edges;
 			image-rendering: -o-crisp-edges;
@@ -55,9 +90,16 @@
 			background-attachment: fixed;
 			-webkit-text-fill-color: transparent;
 			-webkit-background-clip: text;
-			z-index: 9;
+			z-index: 3;
 			mix-blend-mode: difference;
 			pointer-events: none;
+			text-shadow:
+				0 0 12px rgba(255, 97, 136, 0.35),
+				0 0 30px rgba(255, 216, 102, 0.28);
+		}
+
+		.ascii-text-container > div {
+			z-index: 2;
 		}
 	</style>
 </head>
@@ -132,6 +174,7 @@ void main() {
 				this.domElement.style.left = '0';
 				this.domElement.style.width = '100%';
 				this.domElement.style.height = '100%';
+				this.domElement.style.pointerEvents = 'none';
 
 				this.pre = document.createElement('pre');
 				this.domElement.appendChild(this.pre);
@@ -262,6 +305,8 @@ void main() {
 				this.fontSize = fontSize;
 				this.fontFamily = fontFamily;
 				this.color = color;
+				this.paddingX = Math.max(20, Math.round(this.fontSize * 0.1));
+				this.paddingY = Math.max(20, Math.round(this.fontSize * 0.12));
 
 				this.font = `600 ${this.fontSize}px ${this.fontFamily}`;
 			}
@@ -270,8 +315,8 @@ void main() {
 				this.context.font = this.font;
 				const metrics = this.context.measureText(this.txt);
 
-				const textWidth = Math.ceil(metrics.width) + 20;
-				const textHeight = Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent) + 20;
+				const textWidth = Math.ceil(metrics.width) + this.paddingX * 2;
+				const textHeight = Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent) + this.paddingY * 2;
 
 				this.canvas.width = textWidth;
 				this.canvas.height = textHeight;
@@ -281,11 +326,10 @@ void main() {
 				this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
 				this.context.fillStyle = this.color;
 				this.context.font = this.font;
+				this.context.textAlign = 'center';
+				this.context.textBaseline = 'middle';
 
-				const metrics = this.context.measureText(this.txt);
-				const yPos = 10 + metrics.actualBoundingBoxAscent;
-
-				this.context.fillText(this.txt, 10, yPos);
+				this.context.fillText(this.txt, this.canvas.width / 2, this.canvas.height / 2);
 			}
 
 			get width() {
@@ -370,6 +414,7 @@ void main() {
 				});
 
 				this.mesh = new THREE.Mesh(this.geometry, this.material);
+				this.mesh.position.set(0, 0, 0);
 				this.scene.add(this.mesh);
 			}
 
@@ -430,14 +475,16 @@ void main() {
 				this.texture.needsUpdate = true;
 
 				this.mesh.material.uniforms.uTime.value = Math.sin(time);
+				this.mesh.material.uniforms.mouse.value = mapRange(this.mouse.x, 0, this.width, -1, 1);
 
 				this.updateRotation();
+				this.mesh.position.y = Math.sin(time * 1.1) * 0.12;
 				this.filter.render(this.scene, this.camera);
 			}
 
 			updateRotation() {
-				const x = mapRange(this.mouse.y, 0, this.height, 0.5, -0.5);
-				const y = mapRange(this.mouse.x, 0, this.width, -0.5, 0.5);
+				const x = mapRange(this.mouse.y, 0, this.height, 0.35, -0.35);
+				const y = mapRange(this.mouse.x, 0, this.width, -0.35, 0.35);
 
 				this.mesh.rotation.x += (x - this.mesh.rotation.x) * 0.05;
 				this.mesh.rotation.y += (y - this.mesh.rotation.y) * 0.05;
