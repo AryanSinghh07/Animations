@@ -97,126 +97,6 @@
 			to { transform: translate3d(8px, -12px, 0) scale(1.04); }
 		}
 
-		.hud {
-			position: fixed;
-			z-index: 10;
-			backdrop-filter: blur(18px) saturate(1.22);
-			-webkit-backdrop-filter: blur(18px) saturate(1.22);
-			background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 35%, var(--panel) 100%);
-			border: 1px solid var(--line);
-			border-radius: 16px;
-			box-shadow:
-				0 16px 50px rgba(0, 0, 0, 0.38),
-				inset 0 1px 0 rgba(255, 255, 255, 0.28),
-				0 0 0 1px rgba(var(--accent-rgb), 0.12);
-		}
-
-		.hud-main {
-			top: 20px;
-			left: 20px;
-			width: min(360px, calc(100vw - 40px));
-			padding: 16px 16px 14px;
-			animation: revealLeft 0.85s cubic-bezier(0.2, 0.68, 0.2, 1) both;
-		}
-
-		@keyframes revealLeft {
-			from {
-				opacity: 0;
-				transform: translate3d(-14px, 14px, 0);
-				filter: blur(8px);
-			}
-			to {
-				opacity: 1;
-				transform: translate3d(0, 0, 0);
-				filter: blur(0);
-			}
-		}
-
-		.hud-tag {
-			font-size: 10px;
-			font-weight: 600;
-			letter-spacing: 0.22em;
-			text-transform: uppercase;
-			color: rgba(var(--accent-rgb), 0.95);
-			font-family: 'Space Mono', monospace;
-			margin-bottom: 8px;
-		}
-
-		.hud-main h1 {
-			font-size: clamp(22px, 3.5vw, 30px);
-			line-height: 1.06;
-			letter-spacing: 0.01em;
-			font-weight: 700;
-			margin-bottom: 10px;
-		}
-
-		.hud-copy {
-			font-size: 13px;
-			color: var(--text-dim);
-			line-height: 1.55;
-			max-width: 36ch;
-		}
-
-		.hud-stats {
-			margin-top: 14px;
-			display: grid;
-			gap: 8px;
-		}
-
-		.stat-row {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			border-top: 1px solid rgba(255, 255, 255, 0.1);
-			padding-top: 8px;
-			font-size: 12px;
-			letter-spacing: 0.03em;
-		}
-
-		.stat-row span {
-			color: rgba(238, 247, 255, 0.7);
-			text-transform: uppercase;
-			font-size: 11px;
-			letter-spacing: 0.16em;
-			font-family: 'Space Mono', monospace;
-		}
-
-		.stat-row strong {
-			color: rgb(var(--accent-rgb));
-			font-family: 'Space Mono', monospace;
-			font-weight: 700;
-			font-size: 12px;
-			text-shadow: 0 0 18px rgba(var(--accent-rgb), 0.45);
-		}
-
-		.hud-tip {
-			left: 50%;
-			bottom: 20px;
-			transform: translateX(-50%);
-			padding: 10px 14px;
-			font-size: 11px;
-			color: rgba(240, 248, 255, 0.78);
-			letter-spacing: 0.12em;
-			text-transform: uppercase;
-			font-family: 'Space Mono', monospace;
-			animation: revealBottom 0.85s cubic-bezier(0.2, 0.68, 0.2, 1) both;
-			animation-delay: 0.08s;
-			white-space: nowrap;
-		}
-
-		@keyframes revealBottom {
-			from {
-				opacity: 0;
-				transform: translateX(-50%) translateY(14px);
-				filter: blur(8px);
-			}
-			to {
-				opacity: 1;
-				transform: translateX(-50%) translateY(0);
-				filter: blur(0);
-			}
-		}
-
 		.cursor-ring {
 			position: fixed;
 			left: 50%;
@@ -239,34 +119,9 @@
 				border-color 0.2s ease;
 		}
 
-		@media (max-width: 900px) {
-			.hud-main {
-				width: min(330px, calc(100vw - 24px));
-				left: 12px;
-				top: 12px;
-			}
-
-			.hud-tip {
-				left: 12px;
-				right: 12px;
-				bottom: 12px;
-				transform: none;
-				white-space: normal;
-				text-align: center;
-			}
-		}
-
 		@media (max-width: 680px) {
 			.cursor-ring {
 				display: none;
-			}
-
-			.hud-main {
-				padding: 12px;
-			}
-
-			.hud-copy {
-				font-size: 12px;
 			}
 		}
 	</style>
@@ -275,19 +130,6 @@
 	<canvas id="app"></canvas>
 	<div class="atmo" aria-hidden="true"></div>
 	<div class="cursor-ring" id="cursorRing" aria-hidden="true"></div>
-
-	<div class="hud hud-main">
-		<p class="hud-tag">Kinetic Study 07</p>
-		<h1>Antigravity Bloom</h1>
-		<p class="hud-copy">Move your cursor near particles to bend them into living orbit rings. Press A to toggle auto choreography.</p>
-		<div class="hud-stats">
-			<div class="stat-row"><span>Shape</span><strong id="shapeValue">capsule</strong></div>
-			<div class="stat-row"><span>Particles</span><strong id="countValue">300</strong></div>
-			<div class="stat-row"><span>Mode</span><strong id="modeValue">pointer</strong></div>
-		</div>
-	</div>
-
-	<div class="hud hud-tip">Move pointer or touch | Press A for auto mode</div>
 
 	<script type="module">
 		import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -332,9 +174,6 @@
 				this.config = { ...ANTIGRAVITY_CONFIG, ...config };
 
 				this.cursorRing = document.getElementById('cursorRing');
-				this.shapeValueEl = document.getElementById('shapeValue');
-				this.countValueEl = document.getElementById('countValue');
-				this.modeValueEl = document.getElementById('modeValue');
 
 				this.scene = new THREE.Scene();
 				this.scene.fog = new THREE.Fog(0x071022, 48, 140);
@@ -372,14 +211,12 @@
 				this.createStarField();
 
 				this.applyAccentTheme();
-				this.applyHudState();
 
 				this.onResize = this.onResize.bind(this);
 				this.onPointerMove = this.onPointerMove.bind(this);
 				this.onMouseLeave = this.onMouseLeave.bind(this);
 				this.onTouchMove = this.onTouchMove.bind(this);
 				this.onTouchEnd = this.onTouchEnd.bind(this);
-				this.onKeyDown = this.onKeyDown.bind(this);
 				this.animate = this.animate.bind(this);
 
 				this.attachEvents();
@@ -390,12 +227,6 @@
 				const rgb = hexToRgb(this.config.color);
 				if (!rgb) return;
 				document.documentElement.style.setProperty('--accent-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
-			}
-
-			applyHudState() {
-				if (this.shapeValueEl) this.shapeValueEl.textContent = this.config.particleShape;
-				if (this.countValueEl) this.countValueEl.textContent = String(this.config.count);
-				if (this.modeValueEl) this.modeValueEl.textContent = this.config.autoAnimate ? 'auto' : 'pointer';
 			}
 
 			getViewportAtDepth(depth = 0) {
@@ -519,13 +350,6 @@
 				window.addEventListener('mouseleave', this.onMouseLeave);
 				window.addEventListener('touchmove', this.onTouchMove, { passive: true });
 				window.addEventListener('touchend', this.onTouchEnd, { passive: true });
-				window.addEventListener('keydown', this.onKeyDown);
-			}
-
-			onKeyDown(event) {
-				if (event.key.toLowerCase() !== 'a') return;
-				this.config.autoAnimate = !this.config.autoAnimate;
-				this.applyHudState();
 			}
 
 			onPointerMove(event) {
@@ -696,7 +520,6 @@
 				window.removeEventListener('mouseleave', this.onMouseLeave);
 				window.removeEventListener('touchmove', this.onTouchMove);
 				window.removeEventListener('touchend', this.onTouchEnd);
-				window.removeEventListener('keydown', this.onKeyDown);
 
 				if (this.starField) {
 					this.starField.geometry.dispose();
