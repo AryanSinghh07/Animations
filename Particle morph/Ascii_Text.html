@@ -14,7 +14,7 @@
 			height: 100%;
 			margin: 0;
 			overflow: hidden;
-			background: #050507;
+			background: #000;
 			font-family: 'IBM Plex Mono', monospace;
 		}
 
@@ -27,38 +27,7 @@
 			touch-action: none;
 			display: grid;
 			place-items: center;
-			background:
-				radial-gradient(70vmax 70vmax at 50% 28%, rgba(255, 158, 110, 0.2) 0%, rgba(255, 158, 110, 0) 52%),
-				radial-gradient(80vmax 80vmax at 12% -12%, rgba(255, 97, 136, 0.24) 0%, rgba(255, 97, 136, 0) 52%),
-				radial-gradient(90vmax 90vmax at 92% 110%, rgba(255, 216, 102, 0.2) 0%, rgba(255, 216, 102, 0) 48%),
-				linear-gradient(180deg, #111423 0%, #0a0d16 45%, #06070d 100%);
-		}
-
-		.ascii-text-container::before {
-			content: '';
-			position: absolute;
-			inset: 0;
-			pointer-events: none;
-			background:
-				linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-				linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-			background-size: 54px 54px;
-			opacity: 0.28;
-			animation: gridPulse 14s ease-in-out infinite;
-		}
-
-		.ascii-text-container::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			pointer-events: none;
-			background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.62) 100%);
-		}
-
-		@keyframes gridPulse {
-			0%,
-			100% { opacity: 0.2; transform: translate3d(0, 0, 0); }
-			50% { opacity: 0.34; transform: translate3d(-10px, 6px, 0); }
+			background: #000;
 		}
 
 		.ascii-text-container canvas {
@@ -101,20 +70,53 @@
 		.ascii-text-container > div {
 			z-index: 2;
 		}
+
+		.text-input-panel {
+			position: fixed;
+			right: 18px;
+			bottom: 18px;
+			z-index: 30;
+			padding: 10px;
+			border: 1px solid rgba(255, 255, 255, 0.24);
+			background: rgba(0, 0, 0, 0.8);
+			border-radius: 10px;
+			backdrop-filter: blur(6px);
+			-webkit-backdrop-filter: blur(6px);
+		}
+
+		.text-input-panel input {
+			width: min(260px, 58vw);
+			height: 36px;
+			padding: 0 11px;
+			outline: none;
+			border: 1px solid rgba(255, 255, 255, 0.28);
+			border-radius: 8px;
+			background: #000;
+			color: #f5f5f5;
+			font-size: 14px;
+			font-family: 'IBM Plex Mono', monospace;
+		}
+
+		.text-input-panel input::placeholder {
+			color: rgba(255, 255, 255, 0.52);
+		}
 	</style>
 </head>
 <body>
 	<div id="ascii-text-root" class="ascii-text-container"></div>
+	<div class="text-input-panel">
+		<input id="text-input" type="text" placeholder="Type a word" />
+	</div>
 
 	<script type="module">
 		import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 		const CONFIG = {
-			text: 'hello_world',
-			asciiFontSize: 8,
-			textFontSize: 200,
+			text: '',
+			asciiFontSize: 7,
+			textFontSize: 160,
 			textColor: '#fdf9f3',
-			planeBaseHeight: 8,
+			planeBaseHeight: 6.5,
 			enableWaves: true,
 		};
 
@@ -149,11 +151,14 @@ uniform sampler2D uTexture;
 void main() {
 		float time = uTime;
 		vec2 pos = vUv;
+		float shift = sin(time + mouse + pos.y * 6.2831) * 0.006;
+		vec2 uvR = clamp(pos + vec2(shift, 0.0), 0.0, 1.0);
+		vec2 uvG = clamp(pos + vec2(-shift * 0.4, shift * 0.3), 0.0, 1.0);
+		vec2 uvB = clamp(pos + vec2(0.0, -shift), 0.0, 1.0);
 
-		float move = sin(time + mouse) * 0.01;
-		float r = texture2D(uTexture, pos + cos(time * 2. - time + pos.x) * .01).r;
-		float g = texture2D(uTexture, pos + tan(time * .5 + pos.x - time) * .01).g;
-		float b = texture2D(uTexture, pos - cos(time * 2. + time + pos.y) * .01).b;
+		float r = texture2D(uTexture, uvR).r;
+		float g = texture2D(uTexture, uvG).g;
+		float b = texture2D(uTexture, uvB).b;
 		float a = texture2D(uTexture, pos).a;
 		gl_FragColor = vec4(r, g, b, a);
 }
@@ -188,7 +193,7 @@ void main() {
 				this.invert = invert ?? true;
 				this.fontSize = fontSize ?? 12;
 				this.fontFamily = fontFamily ?? "'Courier New', monospace";
-				this.charset = charset ?? " .'`^\",:;Il!i~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+				this.charset = charset ?? ' .:-=+*#%@';
 
 				this.context.webkitImageSmoothingEnabled = false;
 				this.context.mozImageSmoothingEnabled = false;
@@ -313,23 +318,30 @@ void main() {
 
 			resize() {
 				this.context.font = this.font;
-				const metrics = this.context.measureText(this.txt);
+				this.metrics = this.context.measureText(this.txt || ' ');
 
-				const textWidth = Math.ceil(metrics.width) + this.paddingX * 2;
-				const textHeight = Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent) + this.paddingY * 2;
+				const textWidth = Math.ceil(this.metrics.width) + this.paddingX * 2;
+				const textHeight = Math.ceil(this.metrics.actualBoundingBoxAscent + this.metrics.actualBoundingBoxDescent) + this.paddingY * 2;
 
-				this.canvas.width = textWidth;
-				this.canvas.height = textHeight;
+				this.canvas.width = Math.max(2, textWidth);
+				this.canvas.height = Math.max(2, textHeight);
 			}
 
 			render() {
 				this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+				if (!this.txt) return;
+
 				this.context.fillStyle = this.color;
 				this.context.font = this.font;
 				this.context.textAlign = 'center';
-				this.context.textBaseline = 'middle';
+				this.context.textBaseline = 'alphabetic';
 
-				this.context.fillText(this.txt, this.canvas.width / 2, this.canvas.height / 2);
+				const ascent = this.metrics ? this.metrics.actualBoundingBoxAscent : this.fontSize * 0.75;
+				const descent = this.metrics ? this.metrics.actualBoundingBoxDescent : this.fontSize * 0.25;
+				const textBlockHeight = ascent + descent;
+				const baselineY = (this.canvas.height - textBlockHeight) / 2 + ascent;
+
+				this.context.fillText(this.txt, this.canvas.width / 2, baselineY);
 			}
 
 			get width() {
@@ -394,6 +406,10 @@ void main() {
 
 				this.texture = new THREE.CanvasTexture(this.textCanvas.texture);
 				this.texture.minFilter = THREE.NearestFilter;
+				this.texture.magFilter = THREE.NearestFilter;
+				this.texture.wrapS = THREE.ClampToEdgeWrapping;
+				this.texture.wrapT = THREE.ClampToEdgeWrapping;
+				this.texture.needsUpdate = true;
 
 				const textAspect = this.textCanvas.width / this.textCanvas.height;
 				const baseH = this.planeBaseHeight;
@@ -415,7 +431,43 @@ void main() {
 
 				this.mesh = new THREE.Mesh(this.geometry, this.material);
 				this.mesh.position.set(0, 0, 0);
+				this.mesh.visible = this.textString.length > 0;
 				this.scene.add(this.mesh);
+			}
+
+			setText(nextText) {
+				const value = (nextText ?? '').toString();
+				this.textString = value;
+
+				if (!this.textCanvas || !this.mesh) return;
+
+				this.textCanvas.txt = this.textString;
+				this.textCanvas.resize();
+				this.textCanvas.render();
+
+				if (this.texture) {
+					this.texture.dispose();
+				}
+				this.texture = new THREE.CanvasTexture(this.textCanvas.texture);
+				this.texture.minFilter = THREE.NearestFilter;
+				this.texture.magFilter = THREE.NearestFilter;
+				this.texture.wrapS = THREE.ClampToEdgeWrapping;
+				this.texture.wrapT = THREE.ClampToEdgeWrapping;
+				this.texture.needsUpdate = true;
+
+				this.mesh.material.uniforms.uTexture.value = this.texture;
+				this.mesh.material.needsUpdate = true;
+				this.mesh.visible = this.textString.length > 0;
+				this.mesh.position.set(0, 0, 0);
+				this.mesh.rotation.set(0, 0, 0);
+
+				const textAspect = this.textCanvas.width / this.textCanvas.height;
+				const planeW = this.planeBaseHeight * textAspect;
+				const planeH = this.planeBaseHeight;
+
+				const nextGeometry = new THREE.PlaneGeometry(planeW, planeH, 36, 36);
+				this.mesh.geometry.dispose();
+				this.mesh.geometry = nextGeometry;
 			}
 
 			setRenderer() {
@@ -517,6 +569,10 @@ void main() {
 				this.container.removeEventListener('mousemove', this.onMouseMove);
 				this.container.removeEventListener('touchmove', this.onMouseMove);
 				this.clear();
+				if (this.texture) {
+					this.texture.dispose();
+					this.texture = null;
+				}
 				if (this.renderer) {
 					this.renderer.dispose();
 					this.renderer.forceContextLoss();
@@ -525,8 +581,17 @@ void main() {
 		}
 
 		const container = document.getElementById('ascii-text-root');
+		const textInput = document.getElementById('text-input');
 		let asciiInstance = null;
 		let resizeObserver = null;
+		const handleTextInput = event => {
+			const value = event.target.value;
+			CONFIG.text = value;
+			if (asciiInstance) asciiInstance.setText(value);
+		};
+
+		textInput.value = CONFIG.text;
+		textInput.addEventListener('input', handleTextInput);
 
 		async function mountASCIIText() {
 			const rect = container.getBoundingClientRect();
@@ -551,6 +616,7 @@ void main() {
 				resizeObserver.disconnect();
 				resizeObserver = null;
 			}
+			textInput.removeEventListener('input', handleTextInput);
 			if (asciiInstance) {
 				asciiInstance.dispose();
 				asciiInstance = null;
