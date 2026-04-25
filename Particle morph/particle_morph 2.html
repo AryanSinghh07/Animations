@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Particle Morph — Interactive 3D Specimen</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+
+<style>
+  /* ==========================================================================
+     DESIGN TOKENS
+     ========================================================================== */
+  :root {
+    --accent: #00f0ff;
+    --accent-rgb: 0, 240, 255;
+    --accent-soft: rgba(var(--accent-rgb), 0.14);
+    --accent-glow: rgba(var(--accent-rgb), 0.3);
+    --bg: #05060b;
+    --bg-top: #101625;
+    --bg-bottom: #04060c;
+    --warm-rgb: 255, 120, 76;
+    --panel: rgba(9, 13, 22, 0.52);
+    --panel-border: rgba(255, 255, 255, 0.07);
+    --panel-border-hi: rgba(255, 255, 255, 0.14);
+    --text: rgba(255, 255, 255, 0.94);
+    --text-dim: rgba(255, 255, 255, 0.42);
+    --text-mid: rgba(255, 255, 255, 0.66);
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --serif: 'Instrument Serif', 'Times New Roman', serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+
+  body {
+    background:
+      radial-gradient(120vmax 120vmax at 7% -24%, rgba(var(--accent-rgb), 0.24) 0%, transparent 58%),
+      radial-gradient(95vmax 95vmax at 96% 118%, rgba(var(--warm-rgb), 0.17) 0%, transparent 60%),
+      linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    color: var(--text);
+    font-family: var(--mono);
+    overflow: hidden;
+    cursor: none;  /* Custom cursor below */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    position: relative;
+  }
+
+  /* Vignette overlay for focal depth */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 16%, rgba(0, 0, 0, 0.76) 100%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.42) 100%);
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  /* Faint grid backdrop — scientific lab feel, nearly invisible */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+      radial-gradient(circle at 50% 50%, rgba(var(--accent-rgb), 0.08) 0%, transparent 65%);
+    background-size: 62px 62px, 62px 62px, 100% 100%;
+    animation: gridDrift 24s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  @keyframes gridDrift {
+    0% { transform: translate(0, 0); }
+    50% { transform: translate(-14px, -10px); }
+    100% { transform: translate(0, 0); }
+  }
+
+  .bg-orb {
+    position: fixed;
+    width: 58vmax;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    filter: blur(74px);
+    z-index: 1;
+    animation: orbFloat 20s ease-in-out infinite;
+  }
+
+  .bg-orb-a {
+    top: -22vmax;
+    left: -15vmax;
+    background: radial-gradient(circle, rgba(var(--accent-rgb), 0.52) 0%, rgba(var(--accent-rgb), 0.08) 54%, transparent 74%);
+  }
+
+  .bg-orb-b {
+    right: -17vmax;
+    bottom: -24vmax;
+    background: radial-gradient(circle, rgba(var(--warm-rgb), 0.45) 0%, rgba(var(--warm-rgb), 0.07) 56%, transparent 75%);
+    animation-delay: -8s;
+    animation-duration: 24s;
+  }
+
+  @keyframes orbFloat {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    35% { transform: translate3d(18px, -10px, 0) scale(1.04); }
+    70% { transform: translate3d(-12px, 12px, 0) scale(0.98); }
+  }
+
+  #canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    z-index: 0;
+    filter: saturate(1.18) contrast(1.08);
+  }
+
+  /* Custom glowing cursor */
+  #cursor {
+    position: fixed;
+    width: 22px;
+    height: 22px;
+    border: 1px solid rgba(var(--accent-rgb), 0.92);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 100;
+    transform: translate(-50%, -50%);
+    transition: width 0.2s ease, height 0.2s ease, background 0.2s ease;
+    mix-blend-mode: screen;
+    box-shadow:
+      0 0 18px var(--accent-glow),
+      0 0 32px rgba(var(--accent-rgb), 0.24);
+  }
+  #cursor::after {
+    content: '';
+    position: absolute;
+    inset: 7px;
+    background: rgb(var(--accent-rgb));
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.9);
+  }
+
+  /* ==========================================================================
+     PANELS
+     ========================================================================== */
+  .panel {
+    position: fixed;
+    background: var(--panel);
+    backdrop-filter: blur(22px) saturate(1.3);
+    -webkit-backdrop-filter: blur(22px) saturate(1.3);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    z-index: 10;
+    box-shadow:
+      0 26px 70px rgba(0, 0, 0, 0.56),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 42px rgba(var(--accent-rgb), 0.03);
+    overflow: hidden;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(130deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.01) 40%, rgba(var(--accent-rgb), 0.16));
+    opacity: 0.2;
+  }
+
+  @keyframes panelReveal {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+      filter: blur(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes panelRevealCenter {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(12px);
+      filter: blur(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      filter: blur(0);
+    }
+  }
+
+  /* ---- Brand / Title (top-left) ---- */
+  .brand {
+    top: 24px;
+    left: 24px;
+    padding: 18px 22px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    animation: panelReveal 0.8s cubic-bezier(0.2, 0.7, 0.15, 1) both;
+  }
+  .brand-dot {
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    background: rgb(var(--accent-rgb));
+    box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.92), 0 0 28px rgba(var(--accent-rgb), 0.24);
+    animation: pulse 2.4s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.55; transform: scale(0.9); }
+    50%      { opacity: 1;    transform: scale(1.05); }
+  }
+  .brand-title {
+    font-family: var(--serif);
+    font-size: 24px;
+    font-weight: 400;
+    letter-spacing: 0.015em;
+    line-height: 1;
+    font-style: italic;
+    text-shadow: 0 1px 18px rgba(var(--accent-rgb), 0.12);
+  }
+  .brand-sub {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.21em;
+    text-transform: uppercase;
+    margin-top: 7px;
+    font-weight: 400;
+  }
+
+  /* ---- Instructions (top-right) ---- */
+  .info {
+    top: 24px;
+    right: 24px;
+    padding: 16px 20px;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    line-height: 2;
+    max-width: 240px;
+    animation: panelReveal 0.8s cubic-bezier(0.2, 0.7, 0.15, 1) both;
+    animation-delay: 0.08s;
+  }
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    align-items: baseline;
+  }
+  .info-key {
+    color: var(--text);
+    font-weight: 500;
+  }
+  .info-label {
+    color: var(--text-dim);
+  }
+
+  /* ---- Readout (bottom-left) ---- */
+  .readout {
+    bottom: 24px;
+    left: 24px;
+    padding: 14px 20px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 180px;
+    animation: panelReveal 0.8s cubic-bezier(0.2, 0.7, 0.15, 1) both;
+    animation-delay: 0.14s;
+  }
+  .readout-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: baseline;
+  }
+  .readout-val {
+    color: rgb(var(--accent-rgb));
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.08em;
+    text-shadow: 0 0 12px rgba(var(--accent-rgb), 0.3);
+  }
+
+  /* ---- Shape selector (bottom-center) ---- */
+  .shapes {
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px;
+    display: flex;
+    gap: 2px;
+    animation: panelRevealCenter 0.8s cubic-bezier(0.2, 0.7, 0.15, 1) both;
+    animation-delay: 0.22s;
+  }
+  .shape-btn {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid transparent;
+    padding: 11px 15px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+  }
+  .shape-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100% - 14px);
+    height: calc(100% - 12px);
+    border-radius: 8px;
+    background: linear-gradient(145deg, rgba(var(--accent-rgb), 0.18), rgba(var(--accent-rgb), 0));
+    transition: opacity 0.22s ease;
+    opacity: 0;
+  }
+  .shape-btn::after {
+    content: '';
+    position: absolute;
+    left: 24%;
+    right: 24%;
+    bottom: 6px;
+    height: 1px;
+    background: rgba(var(--accent-rgb), 0.68);
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform 0.24s ease;
+  }
+  .shape-btn:hover {
+    color: var(--text);
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .shape-btn:hover::before {
+    opacity: 1;
+  }
+  .shape-btn:hover::after {
+    transform: scaleX(1);
+  }
+  .shape-btn.active {
+    color: rgb(var(--accent-rgb));
+    background: rgba(var(--accent-rgb), 0.16);
+    border-color: rgba(var(--accent-rgb), 0.34);
+    box-shadow: 0 8px 24px rgba(var(--accent-rgb), 0.2);
+  }
+  .shape-btn.active::before {
+    opacity: 1;
+  }
+  .shape-btn.active::after {
+    transform: scaleX(1);
+  }
+
+  /* ---- Color picker (bottom-right) ---- */
+  .colors {
+    bottom: 24px;
+    right: 24px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    animation: panelReveal 0.8s cubic-bezier(0.2, 0.7, 0.15, 1) both;
+    animation-delay: 0.3s;
+  }
+  .colors-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding-right: 6px;
+    border-right: 1px solid var(--panel-border);
+    margin-right: 2px;
+  }
+  .color-dot {
+    width: 19px;
+    height: 19px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .color-dot:hover {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06);
+  }
+  .color-dot.active {
+    transform: scale(1.12);
+    border-color: rgba(255, 255, 255, 0.62);
+    box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.15);
+  }
+  .color-dot.active::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    opacity: 0.75;
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 820px) {
+    .info { display: none; }
+    .bg-orb { opacity: 0.52; filter: blur(80px); }
+    .brand { padding: 14px 16px; }
+    .brand-title { font-size: 18px; }
+    .readout { padding: 10px 14px; min-width: auto; }
+    .shapes { padding: 4px; }
+    .shape-btn { padding: 9px 10px; font-size: 9px; letter-spacing: 0.12em; }
+    .colors { padding: 10px 12px; gap: 10px; }
+    .colors-label { display: none; }
+    body { cursor: default; }
+    #cursor { display: none; }
+  }
+
+  @media (max-width: 560px) {
+    .shapes { overflow-x: auto; max-width: calc(100vw - 32px); }
+    .shape-btn { flex-shrink: 0; }
+  }
+
+  /* Hide text selection for UI chrome */
+  .panel, .panel * { user-select: none; -webkit-user-select: none; }
+</style>
+</head>
+<body>
+
+<div class="bg-orb bg-orb-a" aria-hidden="true"></div>
+<div class="bg-orb bg-orb-b" aria-hidden="true"></div>
+
+<canvas id="canvas"></canvas>
+<div id="cursor"></div>
+
+<!-- BRAND -->
+<div class="panel brand">
+  <span class="brand-dot" id="brandDot"></span>
+  <div>
+    <div class="brand-title">Particle Morph</div>
+    <div class="brand-sub">Specimen · 3D · Observatory</div>
+  </div>
+</div>
+
+<!-- INSTRUCTIONS -->
+<div class="panel info">
+  <div class="info-row"><span class="info-label">Cursor</span><span class="info-key">Repel Field</span></div>
+  <div class="info-row"><span class="info-label">Click</span><span class="info-key">Cycle Form</span></div>
+  <div class="info-row"><span class="info-label">Scroll</span><span class="info-key">Zoom Axis</span></div>
+</div>
+
+<!-- READOUT -->
+<div class="panel readout">
+  <div class="readout-row"><span>Particles</span><span class="readout-val" id="pcVal">0000</span></div>
+  <div class="readout-row"><span>FPS</span><span class="readout-val" id="fpsVal">60</span></div>
+  <div class="readout-row"><span>Form</span><span class="readout-val" id="formVal">IDLE</span></div>
+</div>
+
+<!-- SHAPE SELECTOR -->
+<div class="panel shapes" id="shapes"></div>
+
+<!-- COLOR PICKER -->
+<div class="panel colors" id="colors">
+  <span class="colors-label">Hue</span>
+</div>
+
+<!-- ========================================================================
+     Three.js r128
+     ======================================================================== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+'use strict';
+
+/* ============================================================================
+   CONFIG
+   ========================================================================== */
+const IS_SMALL        = window.innerWidth < 768;
+const PARTICLE_COUNT  = IS_SMALL ? 3000 : 5000;
+const LERP            = 0.055;   // Per-frame interpolation toward target
+const MOUSE_RADIUS    = 1.4;     // Repulsion radius in world units
+const MOUSE_FORCE     = 0.38;    // Max repulsion offset per frame
+
+const PALETTE = [
+  { name: 'Cyan',    hex: '#00f0ff' },
+  { name: 'Magenta', hex: '#ff3bd4' },
+  { name: 'Gold',    hex: '#ffc83d' },
+  { name: 'Coral',   hex: '#ff6b6b' },
+  { name: 'Violet',  hex: '#a78bfa' },
+  { name: 'Mint',    hex: '#4ade80' },
+  { name: 'White',   hex: '#ffffff' },
+];
+
+/* ============================================================================
+   SHAPE GENERATORS
+   Each returns a Float32Array of length count*3 with xyz positions.
+   Designed to be aesthetically pleasing at PARTICLE_COUNT density.
+   ========================================================================== */
+
+// ---- IDLE: 3D gaussian-ish cloud ----
+function genIdle(n) {
+  const a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    // Uniform volume sampling via cube-root of random for radius
+    const theta = Math.random() * Math.PI * 2;
+    const u = 2 * Math.random() - 1;
+    const s = Math.sqrt(1 - u * u);
+    const r = Math.cbrt(Math.random()) * 4.2;
+    a[i*3    ] = r * s * Math.cos(theta);
+    a[i*3 + 1] = r * u;
+    a[i*3 + 2] = r * s * Math.sin(theta);
+  }
+  return a;
+}
+
+// ---- SPHERE: uniform surface (via normalized trig, NOT polar-biased) ----
+function genSphere(n) {
+  const a = new Float32Array(n * 3);
+  const R = 2.8;
+  for (let i = 0; i < n; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const u = 2 * Math.random() - 1;          // uniform in [-1, 1]
+    const s = Math.sqrt(1 - u * u);
+    a[i*3    ] = R * s * Math.cos(theta);
+    a[i*3 + 1] = R * u;
+    a[i*3 + 2] = R * s * Math.sin(theta);
+  }
+  return a;
+}
+
+// ---- CUBE: particles distributed along 12 edges (wireframe silhouette) ----
+function genCube(n) {
+  const a = new Float32Array(n * 3);
+  const s = 2.3;
+  const EDGES = [
+    [-1,-1,-1, 1,-1,-1], [-1,-1, 1, 1,-1, 1],
+    [-1, 1,-1, 1, 1,-1], [-1, 1, 1, 1, 1, 1],  // x-edges
+    [-1,-1,-1,-1, 1,-1], [ 1,-1,-1, 1, 1,-1],
+    [-1,-1, 1,-1, 1, 1], [ 1,-1, 1, 1, 1, 1],  // y-edges
+    [-1,-1,-1,-1,-1, 1], [ 1,-1,-1, 1,-1, 1],
+    [-1, 1,-1,-1, 1, 1], [ 1, 1,-1, 1, 1, 1],  // z-edges
+  ];
+  for (let i = 0; i < n; i++) {
+    const e = EDGES[i % 12];
+    const t = Math.random();
+    a[i*3    ] = s * (e[0] + (e[3] - e[0]) * t);
+    a[i*3 + 1] = s * (e[1] + (e[4] - e[1]) * t);
+    a[i*3 + 2] = s * (e[2] + (e[5] - e[2]) * t);
+  }
+  return a;
+}
+
+// ---- TORUS: standard (u,v) parametric donut ----
+function genTorus(n) {
+  const a = new Float32Array(n * 3);
+  const R = 2.4, r = 0.85;
+  for (let i = 0; i < n; i++) {
+    const u = Math.random() * Math.PI * 2;   // around big circle
+    const v = Math.random() * Math.PI * 2;   // around tube
+    a[i*3    ] = (R + r * Math.cos(v)) * Math.cos(u);
+    a[i*3 + 1] = r * Math.sin(v);
+    a[i*3 + 2] = (R + r * Math.cos(v)) * Math.sin(u);
+  }
+  return a;
+}
+
+// ---- HEART: classic parametric + subtle Z thickness ----
+function genHeart(n) {
+  const a = new Float32Array(n * 3);
+  const scale = 0.135;
+  for (let i = 0; i < n; i++) {
+    const t = Math.random() * Math.PI * 2;
+    // Classic heart curve
+    const x = 16 * Math.pow(Math.sin(t), 3);
+    const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+    // Z thickness — puffier in center, thinner at tip
+    const thick = 0.95 - 0.35 * Math.abs(Math.cos(t));
+    const z = (Math.random() - 0.5) * thick;
+    a[i*3    ] = x * scale;
+    a[i*3 + 1] = y * scale;
+    a[i*3 + 2] = z;
+  }
+  return a;
+}
+
+// ---- FLOWER: 6-petal rose curve with slight petal cup ----
+function genFlower(n) {
+  const a = new Float32Array(n * 3);
+  const petals = 6;
+  for (let i = 0; i < n; i++) {
+    const t = Math.random() * Math.PI * 2;
+    const inner = Math.pow(Math.random(), 1.1); // 0 -> center, 1 -> tip
+    const r = 2.9 * Math.abs(Math.cos(petals * t)) * inner;
+    const x = r * Math.cos(t);
+    const z = r * Math.sin(t);
+    // Petals curl upward toward tips
+    const y = Math.pow(inner, 2.2) * 0.55 + (Math.random() - 0.5) * 0.08;
+    a[i*3    ] = x;
+    a[i*3 + 1] = y;
+    a[i*3 + 2] = z;
+  }
+  return a;
+}
+
+// ---- GALAXY: 4-arm spiral with central bulge ----
+function genGalaxy(n) {
+  const a = new Float32Array(n * 3);
+  const arms = 4;
+  for (let i = 0; i < n; i++) {
+    const r = Math.pow(Math.random(), 0.72) * 3.9;
+    const arm = i % arms;
+    const armOffset = (arm / arms) * Math.PI * 2;
+    const spin = r * 0.95;                      // spiral tightness
+    const spread = 0.32;                        // arm fuzziness
+    const theta = armOffset + spin + (Math.random() - 0.5) * spread;
+    a[i*3    ] = r * Math.cos(theta);
+    // Disk thickness: thin at edges, puffy at center (bulge)
+    const bulge = Math.max(0, 1 - r / 2.2);
+    a[i*3 + 1] = (Math.random() - 0.5) * (0.12 + bulge * 0.75);
+    a[i*3 + 2] = r * Math.sin(theta);
+  }
+  return a;
+}
+
+// ---- DNA: double helix with cross-rungs ----
+function genDNA(n) {
+  const a = new Float32Array(n * 3);
+  const turns = 3, height = 5.6, radius = 1.1;
+  for (let i = 0; i < n; i++) {
+    const bucket = Math.random();
+    const t = Math.random();
+    const angle = t * turns * Math.PI * 2;
+    let x, y, z;
+    if (bucket < 0.42) {
+      // Strand A
+      x = radius * Math.cos(angle);
+      z = radius * Math.sin(angle);
+      y = (t - 0.5) * height;
+    } else if (bucket < 0.84) {
+      // Strand B (offset by π)
+      x = radius * Math.cos(angle + Math.PI);
+      z = radius * Math.sin(angle + Math.PI);
+      y = (t - 0.5) * height;
+    } else {
+      // Rungs at discrete intervals
+      const steps = turns * 5;
+      const snap = Math.round(t * steps) / steps;
+      const rAng = snap * turns * Math.PI * 2;
+      const lerp = Math.random();
+      const ax = radius * Math.cos(rAng);
+      const az = radius * Math.sin(rAng);
+      const bx = radius * Math.cos(rAng + Math.PI);
+      const bz = radius * Math.sin(rAng + Math.PI);
+      x = ax + (bx - ax) * lerp;
+      z = az + (bz - az) * lerp;
+      y = (snap - 0.5) * height;
+    }
+    a[i*3] = x; a[i*3 + 1] = y; a[i*3 + 2] = z;
+  }
+  return a;
+}
+
+// ---- FACE: stylized — ellipsoid head + eye sockets + brows + nose + smile ----
+function genFace(n) {
+  const a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const r = Math.random();
+    let x, y, z;
+    if (r < 0.50) {
+      // Head: ellipsoid surface (back-weighted via z clamp for visual)
+      const theta = Math.random() * Math.PI * 2;
+      const u = 2 * Math.random() - 1;
+      const s = Math.sqrt(1 - u * u);
+      x = 1.7 * s * Math.cos(theta);
+      y = 2.2 * u;
+      z = 1.4 * s * Math.sin(theta);
+    } else if (r < 0.62) {
+      // Left eye (ellipse in front plane)
+      const t  = Math.random() * Math.PI * 2;
+      const rr = 0.25 * Math.sqrt(Math.random());
+      x = -0.68 + rr * Math.cos(t);
+      y =  0.50 + rr * Math.sin(t) * 0.65;
+      z =  1.32;
+    } else if (r < 0.74) {
+      // Right eye
+      const t  = Math.random() * Math.PI * 2;
+      const rr = 0.25 * Math.sqrt(Math.random());
+      x =  0.68 + rr * Math.cos(t);
+      y =  0.50 + rr * Math.sin(t) * 0.65;
+      z =  1.32;
+    } else if (r < 0.83) {
+      // Eyebrows (slight arcs above eyes)
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const t = Math.random();
+      x = side * (0.42 + t * 0.55);
+      y = 0.96 + Math.sin(t * Math.PI) * 0.07;
+      z = 1.36;
+    } else if (r < 0.92) {
+      // Nose — triangular taper downward
+      const t = Math.random();
+      const w = 0.07 + (1 - t) * 0.18;
+      x = (Math.random() * 2 - 1) * w;
+      y = 0.22 - t * 0.68;
+      z = 1.42 + (1 - t) * 0.1;
+    } else {
+      // Mouth — upturned smile curve
+      const t = Math.random() * 2 - 1;
+      x = t * 0.56;
+      y = -0.78 + 0.12 * t * t;   // parabola opens upward
+      z = 1.30;
+    }
+    a[i*3] = x; a[i*3 + 1] = y; a[i*3 + 2] = z;
+  }
+  return a;
+}
+
+// Registry
+const SHAPES = [
+  { id: 'idle',   name: 'Idle',    fn: genIdle },
+  { id: 'sphere', name: 'Sphere',  fn: genSphere },
+  { id: 'cube',   name: 'Cube',    fn: genCube },
+  { id: 'torus',  name: 'Torus',   fn: genTorus },
+  { id: 'heart',  name: 'Heart',   fn: genHeart },
+  { id: 'flower', name: 'Flower',  fn: genFlower },
+  { id: 'galaxy', name: 'Galaxy',  fn: genGalaxy },
+  { id: 'dna',    name: 'DNA',     fn: genDNA },
+  { id: 'face',   name: 'Face',    fn: genFace },
+];
+
+// Pre-generate every shape once — keeps morph transitions cheap (pointer swap).
+const shapeTargets = {};
+SHAPES.forEach(s => { shapeTargets[s.id] = s.fn(PARTICLE_COUNT); });
+
+/* ============================================================================
+   THREE.JS — SCENE SETUP
+   ========================================================================== */
+const canvas = document.getElementById('canvas');
+
+// Scene: pure black background for dramatic contrast with glowing particles.
+const scene = new THREE.Scene();
+
+// Perspective camera: 60° FOV gives good depth without distortion.
+// Position at z=8 keeps initial cloud comfortably in frame.
+const camera = new THREE.PerspectiveCamera(
+  60,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  100
+);
+camera.position.set(0, 0, 8);
+
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  alpha: false,
+  powerPreference: 'high-performance'
+});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 1);
+
+/* ============================================================================
+   PARTICLE SYSTEM
+   ========================================================================== */
+
+// Current live positions (animated every frame)
+const positions = new Float32Array(PARTICLE_COUNT * 3);
+// Per-particle phase offset to break drift synchrony
+const phases    = new Float32Array(PARTICLE_COUNT);
+
+// Active morph target (swapped on shape change — no data regeneration)
+let currentTargets = shapeTargets.idle;
+
+// Initial positions: same distribution as idle so we boot into a gentle cloud.
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  positions[i*3    ] = shapeTargets.idle[i*3    ];
+  positions[i*3 + 1] = shapeTargets.idle[i*3 + 1];
+  positions[i*3 + 2] = shapeTargets.idle[i*3 + 2];
+  phases[i] = Math.random() * Math.PI * 2;
+}
+
+const geometry = new THREE.BufferGeometry();
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+/* ----------------------------------------------------------------------------
+   Custom shader material:
+   - Vertex shader: perspective-correct point sizing (larger when near camera)
+   - Fragment shader: soft circular glow using smoothstep
+   - Additive blending: overlapping particles accumulate brightness (bloom)
+   ---------------------------------------------------------------------------- */
+const particleMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    uColor:      { value: new THREE.Color(PALETTE[0].hex) },
+    uSize:       { value: 60.0 },
+    uPixelRatio: { value: renderer.getPixelRatio() },
+  },
+  vertexShader: /* glsl */`
+    uniform float uSize;
+    uniform float uPixelRatio;
+    varying float vDepth;
+
+    void main() {
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      // Size attenuation: 1/-z gives standard perspective scaling
+      gl_PointSize = uSize * uPixelRatio * (1.0 / -mvPosition.z);
+      gl_PointSize = max(gl_PointSize, 1.0);
+      vDepth = -mvPosition.z;
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform vec3 uColor;
+    varying float vDepth;
+
+    void main() {
+      // Circular mask with soft radial gradient
+      vec2 c = gl_PointCoord - 0.5;
+      float d = length(c);
+      if (d > 0.5) discard;
+      // Bright core, soft falloff
+      float core  = smoothstep(0.5, 0.0, d);
+      float alpha = pow(core, 1.6);
+      // Subtle depth cue — distant particles slightly dimmer
+      float depthAtt = smoothstep(20.0, 3.0, vDepth);
+      gl_FragColor = vec4(uColor, alpha * depthAtt);
+    }
+  `,
+  transparent: true,
+  blending:    THREE.AdditiveBlending,
+  depthWrite:  false,
+  depthTest:   false,
+});
+
+const points = new THREE.Points(geometry, particleMaterial);
+scene.add(points);
+
+/* ============================================================================
+   MOUSE INTERACTION
+   Project cursor onto z=0 plane in world space for honest 3D distance checks.
+   ========================================================================== */
+const mouse      = new THREE.Vector2(999, 999);
+const mouseWorld = new THREE.Vector3(999, 999, 999);
+const raycaster  = new THREE.Raycaster();
+const mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+
+function updateMouseWorld() {
+  raycaster.setFromCamera(mouse, camera);
+  const hit = raycaster.ray.intersectPlane(mousePlane, mouseWorld);
+  if (!hit) mouseWorld.set(999, 999, 999);
+}
+
+/* ============================================================================
+   ANIMATION LOOP — per frame:
+   1) Compute drift-modulated target for each particle
+   2) Lerp current position toward that target
+   3) Apply mouse repulsion offset
+   4) Upload position buffer to GPU
+   ========================================================================== */
+const clock = new THREE.Clock();
+let activeShape = 'idle';
+
+// FPS tracking
+let fpsFrames = 0;
+let fpsAccum  = 0;
+
+function animate() {
+  const time = clock.getElapsedTime();
+  const dt   = Math.min(clock.getDelta(), 0.05);
+
+  updateMouseWorld();
+
+  // Drift: bigger/slower in idle (organic feel), smaller/faster in shape
+  // (keeps shape readable while staying alive).
+  const driftAmp   = activeShape === 'idle' ? 0.55 : 0.13;
+  const driftSpeed = activeShape === 'idle' ? 0.35 : 0.55;
+
+  const arr = geometry.attributes.position.array;
+  const mx = mouseWorld.x, my = mouseWorld.y, mz = mouseWorld.z;
+  const mRsq = MOUSE_RADIUS * MOUSE_RADIUS;
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const i3 = i * 3;
+    const p  = phases[i];
+
+    // Target = shape position + subtle time-based oscillation
+    const tx = currentTargets[i3    ] + Math.sin(time * driftSpeed       + p      ) * driftAmp;
+    const ty = currentTargets[i3 + 1] + Math.cos(time * driftSpeed * 1.1 + p * 1.3) * driftAmp;
+    const tz = currentTargets[i3 + 2] + Math.sin(time * driftSpeed * 0.9 + p * 0.7) * driftAmp;
+
+    // Exponential smoothing toward target
+    arr[i3    ] += (tx - arr[i3    ]) * LERP;
+    arr[i3 + 1] += (ty - arr[i3 + 1]) * LERP;
+    arr[i3 + 2] += (tz - arr[i3 + 2]) * LERP;
+
+    // Mouse repulsion: push away from cursor point on z=0 plane
+    const dx = arr[i3    ] - mx;
+    const dy = arr[i3 + 1] - my;
+    const dz = arr[i3 + 2] - mz;
+    const dsq = dx*dx + dy*dy + dz*dz;
+    if (dsq < mRsq && dsq > 0.0001) {
+      const d = Math.sqrt(dsq);
+      const f = (1 - d / MOUSE_RADIUS) * MOUSE_FORCE;
+      arr[i3    ] += (dx / d) * f;
+      arr[i3 + 1] += (dy / d) * f;
+      arr[i3 + 2] += (dz / d) * f;
+    }
+  }
+
+  geometry.attributes.position.needsUpdate = true;
+
+  // Gentle auto-rotation reveals the 3D structure without inducing vertigo
+  points.rotation.y += dt * 0.1;
+
+  renderer.render(scene, camera);
+
+  // FPS update every 0.5s for stability
+  fpsFrames++;
+  fpsAccum += dt;
+  if (fpsAccum > 0.5) {
+    fpsEl.textContent = String(Math.round(fpsFrames / fpsAccum)).padStart(2, '0');
+    fpsFrames = 0;
+    fpsAccum  = 0;
+  }
+
+  requestAnimationFrame(animate);
+}
+
+/* ============================================================================
+   SHAPE + COLOR STATE
+   ========================================================================== */
+function setShape(id) {
+  if (!shapeTargets[id]) return;
+  activeShape    = id;
+  currentTargets = shapeTargets[id];
+  document.querySelectorAll('.shape-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.shape === id);
+  });
+  formEl.textContent = id.toUpperCase();
+}
+
+function cycleShape(dir) {
+  const idx = SHAPES.findIndex(s => s.id === activeShape);
+  const next = (idx + dir + SHAPES.length) % SHAPES.length;
+  setShape(SHAPES[next].id);
+}
+
+function setColor(hex) {
+  const clean = hex.replace('#', '');
+  const n = parseInt(clean, 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+
+  particleMaterial.uniforms.uColor.value.set(hex);
+  document.documentElement.style.setProperty('--accent', hex);
+  document.documentElement.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+  document.documentElement.style.setProperty('--accent-soft', `rgba(${r}, ${g}, ${b}, 0.14)`);
+  document.documentElement.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.3)`);
+  brandDotEl.style.background = hex;
+  brandDotEl.style.boxShadow = `0 0 14px rgba(${r}, ${g}, ${b}, 0.92), 0 0 28px rgba(${r}, ${g}, ${b}, 0.24)`;
+  document.querySelectorAll('.color-dot').forEach(d => {
+    d.classList.toggle('active', d.dataset.color === hex);
+  });
+}
+
+/* ============================================================================
+   UI WIRING
+   ========================================================================== */
+const shapesEl   = document.getElementById('shapes');
+const colorsEl   = document.getElementById('colors');
+const pcEl       = document.getElementById('pcVal');
+const fpsEl      = document.getElementById('fpsVal');
+const formEl     = document.getElementById('formVal');
+const brandDotEl = document.getElementById('brandDot');
+const cursorEl   = document.getElementById('cursor');
+
+// Shape buttons
+SHAPES.forEach(s => {
+  const b = document.createElement('button');
+  b.className = 'shape-btn';
+  b.dataset.shape = s.id;
+  b.textContent = s.name;
+  b.addEventListener('click', () => setShape(s.id));
+  shapesEl.appendChild(b);
+});
+
+// Color swatches
+PALETTE.forEach(c => {
+  const d = document.createElement('div');
+  d.className = 'color-dot';
+  d.dataset.color = c.hex;
+  d.style.backgroundColor = c.hex;
+  d.style.color = c.hex;
+  d.title = c.name;
+  d.addEventListener('click', () => setColor(c.hex));
+  colorsEl.appendChild(d);
+});
+
+pcEl.textContent = String(PARTICLE_COUNT).padStart(4, '0');
+setShape('idle');
+setColor(PALETTE[0].hex);
+
+/* ============================================================================
+   EVENT LISTENERS
+   ========================================================================== */
+window.addEventListener('mousemove', (e) => {
+  mouse.x =  (e.clientX / window.innerWidth)  * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  cursorEl.style.left = e.clientX + 'px';
+  cursorEl.style.top  = e.clientY + 'px';
+});
+
+window.addEventListener('mouseleave', () => {
+  mouse.x = 999; mouse.y = 999;
+});
+
+// Click canvas = cycle shape forward (UI button clicks don't propagate here)
+canvas.addEventListener('click', () => cycleShape(1));
+
+// Scroll = zoom (bounded to sensible range)
+window.addEventListener('wheel', (e) => {
+  camera.position.z = Math.max(4, Math.min(16, camera.position.z + e.deltaY * 0.005));
+}, { passive: true });
+
+// Touch support: finger position repels particles
+window.addEventListener('touchmove', (e) => {
+  if (e.touches.length > 0) {
+    const t = e.touches[0];
+    mouse.x =  (t.clientX / window.innerWidth)  * 2 - 1;
+    mouse.y = -(t.clientY / window.innerHeight) * 2 + 1;
+  }
+}, { passive: true });
+window.addEventListener('touchend', () => { mouse.x = 999; mouse.y = 999; });
+
+// Keyboard shortcuts: arrow keys cycle shapes, digits pick shape by index
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === ' ') cycleShape(1);
+  else if (e.key === 'ArrowLeft')              cycleShape(-1);
+  else if (/^[1-9]$/.test(e.key)) {
+    const idx = parseInt(e.key, 10) - 1;
+    if (SHAPES[idx]) setShape(SHAPES[idx].id);
+  }
+});
+
+// Responsive canvas + camera
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  particleMaterial.uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, 2);
+});
+
+// Best-practice cleanup on unload (prevents GPU resource leaks on SPA navigation)
+window.addEventListener('beforeunload', () => {
+  geometry.dispose();
+  particleMaterial.dispose();
+  renderer.dispose();
+});
+
+// Start the render loop
+requestAnimationFrame(animate);
+</script>
+
+</body>
+</html>
