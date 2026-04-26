@@ -218,9 +218,41 @@
       transition: color 0.3s ease;
     }
     .pill-link:hover .pill-label { color: var(--hover-color, #111); }
+
+    /* ════════════════════════════════════════
+       CUSTOM CURSOR
+    ════════════════════════════════════════ */
+    body { cursor: none; }
+    #cursor-ring {
+      position: fixed; pointer-events: none; z-index: 99999;
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.45);
+      transform: translate(-50%, -50%);
+      transition: width .2s ease, height .2s ease,
+                  border-color .2s ease, opacity .3s ease,
+                  background .2s ease;
+      opacity: 0; mix-blend-mode: difference;
+      will-change: left, top;
+    }
+    #cursor-dot {
+      position: fixed; pointer-events: none; z-index: 100000;
+      width: 5px; height: 5px; background: #fff; border-radius: 50%;
+      transform: translate(-50%, -50%); opacity: 0;
+      transition: opacity .3s ease, transform .1s ease;
+      will-change: left, top;
+    }
+
+    /* Pill tilt on hover — handled by GSAP magnetic */
+    .pill-link { cursor: none; }
+    .toggle-bubble { cursor: none; }
+    .logo-bubble   { cursor: none; }
   </style>
 </head>
 <body>
+
+<!-- Cursor -->
+<div id="cursor-ring"></div>
+<div id="cursor-dot"></div>
 
 <!-- Demo page -->
 <div class="demo-page">
@@ -408,6 +440,101 @@ window.addEventListener('resize', () => {
     gsap.set(el, { rotation: isDesktop ? (items[i].rotation ?? 0) : 0 });
   });
 });
+
+// ════════════════════════════════════════════
+//  MOUSE INTERACTIONS
+// ════════════════════════════════════════════
+
+const ring = document.getElementById('cursor-ring');
+const dot  = document.getElementById('cursor-dot');
+let rx = 0, ry = 0, mx = window.innerWidth / 2, my = window.innerHeight / 2;
+let cursorVisible = false;
+
+// ── Smooth lagging ring ──
+(function lagLoop() {
+  rx += (mx - rx) * 0.11;
+  ry += (my - ry) * 0.11;
+  ring.style.left = rx + 'px';
+  ring.style.top  = ry + 'px';
+  requestAnimationFrame(lagLoop);
+})();
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  dot.style.left = mx + 'px';
+  dot.style.top  = my + 'px';
+  if (!cursorVisible) {
+    ring.style.opacity = '1';
+    dot.style.opacity  = '1';
+    cursorVisible = true;
+  }
+});
+document.addEventListener('mouseleave', () => {
+  ring.style.opacity = '0';
+  dot.style.opacity  = '0';
+  cursorVisible = false;
+});
+
+// ── Cursor grows on interactive elements ──
+function onEnterInteractive() {
+  ring.style.width       = '58px';
+  ring.style.height      = '58px';
+  ring.style.borderColor = 'rgba(255,255,255,0.8)';
+}
+function onLeaveInteractive() {
+  ring.style.width       = '36px';
+  ring.style.height      = '36px';
+  ring.style.borderColor = 'rgba(255,255,255,0.45)';
+}
+
+// ── Magnetic pill effect ──
+// When hovering a pill, it gently follows the cursor within its bounds
+function addMagnetic(el, strength = 0.28) {
+  el.addEventListener('mousemove', e => {
+    const rect   = el.getBoundingClientRect();
+    const cx     = rect.left + rect.width  / 2;
+    const cy     = rect.top  + rect.height / 2;
+    const dx     = (e.clientX - cx) * strength;
+    const dy     = (e.clientY - cy) * strength;
+    const rotVal = parseFloat(el.style.getPropertyValue('--item-rot')) || 0;
+    gsap.to(el, {
+      x: dx, y: dy,
+      rotation: rotVal + dx * 0.04,
+      duration: 0.4,
+      ease: 'power2.out',
+      overwrite: 'auto'
+    });
+  });
+
+  el.addEventListener('mouseleave', () => {
+    const rotVal = parseFloat(el.style.getPropertyValue('--item-rot')) || 0;
+    gsap.to(el, {
+      x: 0, y: 0,
+      rotation: rotVal,
+      duration: 0.55,
+      ease: 'elastic.out(1, 0.6)',
+      overwrite: 'auto'
+    });
+    onLeaveInteractive();
+  });
+
+  el.addEventListener('mouseenter', () => {
+    onEnterInteractive();
+    // Dot fills for a moment
+    dot.style.transform = 'translate(-50%,-50%) scale(2.5)';
+    setTimeout(() => { dot.style.transform = 'translate(-50%,-50%) scale(1)'; }, 200);
+  });
+}
+
+// Bind magnetic to each pill
+bubblesRef.forEach(el => addMagnetic(el, 0.25));
+
+// Bind grow-only to nav bubbles (no magnetic — they're fixed to corners)
+[toggleBtn, document.querySelector('.logo-bubble')].forEach(el => {
+  el.addEventListener('mouseenter', onEnterInteractive);
+  el.addEventListener('mouseleave', onLeaveInteractive);
+});
+
 </script>
 </body>
 </html>
