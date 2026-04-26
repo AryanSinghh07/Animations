@@ -244,7 +244,8 @@ float cnoise(vec3 P) {
     camera.position.set(0, 0, 26);
 
     const group = new THREE.Group();
-    group.rotation.z = THREE.MathUtils.degToRad(CONFIG.rotation);
+    const baseRotationZ = THREE.MathUtils.degToRad(CONFIG.rotation);
+    group.rotation.z = baseRotationZ;
     scene.add(group);
 
     const beamMaterial = extendMaterial(THREE.MeshStandardMaterial, {
@@ -255,6 +256,10 @@ uniform float uSpeed;
 uniform float uNoiseIntensity;
 uniform float uScale;
 uniform vec2 uResolution;
+    uniform vec2 uMouse;
+    uniform vec2 uMouseVelocity;
+    uniform float uPointerEnergy;
+    uniform float uHover;
 ${noise}`,
       vertexHeader: `
 float getPos(vec3 pos) {
@@ -277,7 +282,12 @@ vec3 getNormal(vec3 pos) {
       vertex: {
         '#include <begin_vertex>': `
 vBeamUv = uv;
-transformed.z += getPos(transformed.xyz);`,
+transformed.z += getPos(transformed.xyz);
+float mouseBand = abs(uv.y - (0.5 - uMouse.y * 0.35));
+float pointerInfluence = exp(-mouseBand * 11.0) * uHover;
+float pointerWave = sin((uv.y * 20.0 - time * 7.0) + uMouse.x * 5.0) * pointerInfluence;
+transformed.z += pointerWave * (0.22 + 0.48 * uPointerEnergy);
+transformed.x += uMouse.x * pointerInfluence * 0.15;`,
         '#include <beginnormal_vertex>': 'objectNormal = getNormal(position.xyz);',
       },
       fragment: {
@@ -295,6 +305,16 @@ float centerCut = smoothstep(0.07, 0.22, abs(yNorm - 0.5));
 float grain = (noise(gl_FragCoord.xy * 0.95 + vec2(time * 80.0, time * 41.0)) - 0.5) * 0.35 * uNoiseIntensity;
 float base = 0.05 + lobe * 0.95;
 float beam = base * edgeMask * centerCut + grain;
+
+vec2 screenUv = gl_FragCoord.xy / uResolution;
+vec2 mouseUv = vec2(uMouse.x * 0.5 + 0.5, uMouse.y * 0.5 + 0.5);
+float mouseDist = distance(screenUv, mouseUv);
+float velocityMag = clamp(length(uMouseVelocity), 0.0, 1.6);
+float cursorBloom = exp(-mouseDist * 13.0) * uHover;
+float ripple = (sin(mouseDist * 95.0 - time * 16.0) * 0.5 + 0.5) * exp(-mouseDist * 17.0);
+
+beam += cursorBloom * (0.16 + velocityMag * 0.22 + uPointerEnergy * 0.18);
+beam += ripple * (0.05 + velocityMag * 0.1) * uHover;
 beam = clamp(beam, 0.0, 1.0);
 
 float lum = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -312,6 +332,10 @@ gl_FragColor.rgb = vec3(value);`,
         uNoiseIntensity: { value: CONFIG.noiseIntensity },
         uScale: { value: CONFIG.scale },
         uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        uMouse: { value: new THREE.Vector2(0, 0) },
+        uMouseVelocity: { value: new THREE.Vector2(0, 0) },
+        uPointerEnergy: { value: 0 },
+        uHover: { value: 0 },
       },
     });
 
@@ -334,23 +358,72 @@ gl_FragColor.rgb = vec3(value);`,
     scene.add(fill);
 
     const pointer = new THREE.Vector2(0, 0);
+    const pointerSmooth = new THREE.Vector2(0, 0);
+    const pointerVelocity = new THREE.Vector2(0, 0);
+    const velocitySample = new THREE.Vector2(0, 0);
+    let pointerActive = false;
+    let pointerEnergy = 0;
+    let lastPointerTime = performance.now();
 
     function onPointerMove(event) {
-      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      const now = performance.now();
+      const dt = Math.max((now - lastPointerTime) / 1000, 1 / 240);
+      const nextX = (event.clientX / window.innerWidth) * 2 - 1;
+      const nextY = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      velocitySample.set((nextX - pointer.x) / dt, (nextY - pointer.y) / dt);
+      velocitySample.multiplyScalar(0.07);
+      velocitySample.clamp(new THREE.Vector2(-1.6, -1.6), new THREE.Vector2(1.6, 1.6));
+
+      pointerVelocity.lerp(velocitySample, 0.45);
+      pointerEnergy = Math.min(1.2, pointerEnergy + velocitySample.length() * 0.05);
+      pointer.set(nextX, nextY);
+      pointerActive = true;
+      lastPointerTime = now;
+    }
+
+    function onPointerLeave() {
+      pointer.set(0, 0);
+      pointerActive = false;
+      lastPointerTime = performance.now();
     }
 
     const clock = new THREE.Clock();
     let rafId = 0;
 
     function animate() {
+      const delta = clock.getDelta();
       const t = clock.getElapsedTime();
       beamMaterial.uniforms.time.value = t;
 
-      const targetX = -pointer.y * 0.06;
-      const targetY = pointer.x * 0.08;
-      group.rotation.x += (targetX - group.rotation.x) * 0.04;
-      group.rotation.y += (targetY - group.rotation.y) * 0.04;
+      const smoothing = 1.0 - Math.exp(-delta * 10.0);
+      pointerSmooth.lerp(pointer, smoothing);
+      pointerVelocity.multiplyScalar(Math.exp(-delta * 5.5));
+      pointerEnergy = Math.max(0, pointerEnergy - delta * 0.9);
+
+      const hoverTarget = pointerActive ? 1 : 0;
+      beamMaterial.uniforms.uHover.value += (hoverTarget - beamMaterial.uniforms.uHover.value) * smoothing;
+      beamMaterial.uniforms.uPointerEnergy.value += (pointerEnergy - beamMaterial.uniforms.uPointerEnergy.value) * (1.0 - Math.exp(-delta * 8.0));
+      beamMaterial.uniforms.uMouse.value.copy(pointerSmooth);
+      beamMaterial.uniforms.uMouseVelocity.value.copy(pointerVelocity);
+
+      const targetX = -pointerSmooth.y * 0.14 + pointerVelocity.y * 0.03;
+      const targetY = pointerSmooth.x * 0.16 + pointerVelocity.x * 0.03;
+      const targetZ = baseRotationZ + pointerSmooth.x * 0.07;
+      group.rotation.x += (targetX - group.rotation.x) * 0.05;
+      group.rotation.y += (targetY - group.rotation.y) * 0.05;
+      group.rotation.z += (targetZ - group.rotation.z) * 0.04;
+
+      const groupTargetX = pointerSmooth.x * 0.45;
+      const groupTargetY = pointerSmooth.y * 0.3;
+      group.position.x += (groupTargetX - group.position.x) * 0.06;
+      group.position.y += (groupTargetY - group.position.y) * 0.06;
+
+      const camTargetX = pointerSmooth.x * 0.55;
+      const camTargetY = pointerSmooth.y * 0.32;
+      camera.position.x += (camTargetX - camera.position.x) * 0.05;
+      camera.position.y += (camTargetY - camera.position.y) * 0.05;
+      camera.lookAt(scene.position);
 
       renderer.render(scene, camera);
       rafId = requestAnimationFrame(animate);
@@ -365,13 +438,15 @@ gl_FragColor.rgb = vec3(value);`,
     }
 
     window.addEventListener('resize', onResize);
-    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    renderer.domElement.addEventListener('pointermove', onPointerMove, { passive: true });
+    renderer.domElement.addEventListener('pointerleave', onPointerLeave, { passive: true });
     rafId = requestAnimationFrame(animate);
 
     window.addEventListener('beforeunload', () => {
       cancelAnimationFrame(rafId);
       window.removeEventListener('resize', onResize);
-      window.removeEventListener('pointermove', onPointerMove);
+      renderer.domElement.removeEventListener('pointermove', onPointerMove);
+      renderer.domElement.removeEventListener('pointerleave', onPointerLeave);
       beamMaterial.dispose();
       geometry.dispose();
       renderer.dispose();
