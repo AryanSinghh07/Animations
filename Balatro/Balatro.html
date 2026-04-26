@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Balatro Animated Background</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      font-family: 'Inter', sans-serif;
+      background: #0a0a0a;
+    }
+
+    /* ── Canvas fills viewport ── */
+    #balatro-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+
+    .ctrl-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      padding: 7px 14px;
+      color: rgba(255,255,255,0.7);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    .ctrl-btn:hover  { background: rgba(255,255,255,0.13); }
+    .ctrl-btn.active { background: rgba(168,85,247,0.22); border-color: rgba(168,85,247,0.5); color: #e6c8ff; }
+
+    /* ── Custom cursor ── */
+    body { cursor: none; }
+    #cursor-ring {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.4);
+      transform: translate(-50%, -50%);
+      transition: width .18s ease, height .18s ease, border-color .18s ease, opacity .3s;
+      opacity: 0;
+      mix-blend-mode: screen;
+      will-change: left, top;
+    }
+    #cursor-dot {
+      position: fixed;
+      pointer-events: none;
+      z-index: 10000;
+      width: 5px; height: 5px;
+      background: #fff;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      transition: opacity .3s;
+      will-change: left, top;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- WebGL Canvas -->
+  <canvas id="balatro-canvas"></canvas>
+
+  <!-- Cursor -->
+  <div id="cursor-ring"></div>
+  <div id="cursor-dot"></div>
+
+  <!-- Controls -->
+  <details class="controls">
+    <summary>Controls</summary>
+    <div class="control-grid">
+
+      <div class="control-row">
+        <label>Spin Speed</label>
+        <input type="range" id="spinSpeed" min="0" max="20" step="0.1" value="7.0" oninput="updateUniform('spinSpeed', this.value)">
+        <span id="spinSpeedVal">7.0</span>
+      </div>
+
+      <div class="control-row">
+        <label>Spin Amount</label>
+        <input type="range" id="spinAmount" min="0" max="1" step="0.01" value="0.25" oninput="updateUniform('spinAmount', this.value)">
+        <span id="spinAmountVal">0.25</span>
+      </div>
+
+      <div class="control-row">
+        <label>Contrast</label>
+        <input type="range" id="contrast" min="0.5" max="6" step="0.1" value="3.5" oninput="updateUniform('contrast', this.value)">
+        <span id="contrastVal">3.5</span>
+      </div>
+
+      <div class="control-row">
+        <label>Lighting</label>
+        <input type="range" id="lighting" min="0" max="1" step="0.01" value="0.4" oninput="updateUniform('lighting', this.value)">
+        <span id="lightingVal">0.4</span>
+      </div>
+
+      <div class="control-row">
+        <label>Pixel Filter</label>
+        <input type="range" id="pixelFilter" min="100" max="2000" step="10" value="745" oninput="updateUniform('pixelFilter', this.value)">
+        <span id="pixelFilterVal">745</span>
+      </div>
+
+
+      <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-top:2px;">
+        <button class="ctrl-btn" id="rotateBtn" onclick="toggleRotate()">
+          <span id="rotateBtnIcon">▶</span>&nbsp;<span id="rotateBtnText">Start Rotation</span>
+        </button>
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:10px; margin-top:2px;">
+        <div style="font-size:0.72rem;color:rgba(255,255,255,0.35);margin-bottom:8px;">Colors</div>
+        <div class="color-row">
+          <label>Color 1</label>
+          <input type="color" id="color1" value="#A855F7" oninput="updateColor('color1', this.value)">
+          <label>Color 2</label>
+          <input type="color" id="color2" value="#6D28D9" oninput="updateColor('color2', this.value)">
+          <label>Color 3</label>
+          <input type="color" id="color3" value="#1B1038" oninput="updateColor('color3', this.value)">
+        </div>
+      </div>
+
+    </div>
+  </details>
+
+  <script>
+  // ─────────────────────────────────────────────
+  //  CONFIG  (mirrors React component props)
+  // ─────────────────────────────────────────────
+  const CONFIG = {
+    spinRotation:    -2.0,
+    spinSpeed:        7.0,
+    offset:          [0.0, 0.0],
+    color1:          '#A855F7',
+    color2:          '#6D28D9',
+    color3:          '#1B1038',
+    contrast:         3.5,
+    lighting:         0.4,
+    spinAmount:       0.25,
+    pixelFilter:    745.0,
+    spinEase:         1.0,
+    isRotate:        false,
+    mouseInteraction: true,
+  };
+
+  // ─────────────────────────────────────────────
+  //  GLSL SHADERS  (identical to React source)
+  // ─────────────────────────────────────────────
+  const VERT = `
+    attribute vec2 position;
+    attribute vec2 uv;
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position, 0.0, 1.0);
+    }
+  `;
+
+  const FRAG = `
+    precision highp float;
+    #define PI 3.14159265359
+
+    uniform float iTime;
+    uniform vec3  iResolution;
+    uniform float uSpinRotation;
+    uniform float uSpinSpeed;
+    uniform vec2  uOffset;
+    uniform vec4  uColor1;
+    uniform vec4  uColor2;
+    uniform vec4  uColor3;
+    uniform float uContrast;
+    uniform float uLighting;
+    uniform float uSpinAmount;
+    uniform float uPixelFilter;
+    uniform float uSpinEase;
+    uniform bool  uIsRotate;
+    uniform vec2  uMouse;
+
+    varying vec2 vUv;
+
+    vec4 effect(vec2 screenSize, vec2 screen_coords) {
+      float pixel_size = length(screenSize.xy) / uPixelFilter;
+      vec2 uv = (floor(screen_coords.xy * (1.0 / pixel_size)) * pixel_size
+                 - 0.5 * screenSize.xy) / length(screenSize.xy) - uOffset;
+      float uv_len = length(uv);
+
+      float speed = (uSpinRotation * uSpinEase * 0.2);
+      if (uIsRotate) { speed = iTime * speed; }
+      speed += 302.2;
+
+      float mouseInfluence = (uMouse.x * 2.0 - 1.0);
+      speed += mouseInfluence * 0.1;
+
+      float new_pixel_angle = atan(uv.y, uv.x) + speed
+          - uSpinEase * 20.0 * (uSpinAmount * uv_len + (1.0 - uSpinAmount));
+      vec2 mid = (screenSize.xy / length(screenSize.xy)) / 2.0;
+      uv = (vec2(
+              uv_len * cos(new_pixel_angle) + mid.x,
+              uv_len * sin(new_pixel_angle) + mid.y
+            ) - mid);
+
+      uv *= 30.0;
+      float baseSpeed = iTime * uSpinSpeed;
+      speed = baseSpeed + mouseInfluence * 2.0;
+
+      vec2 uv2 = vec2(uv.x + uv.y);
+      for (int i = 0; i < 5; i++) {
+        uv2 += sin(max(uv.x, uv.y)) + uv;
+        uv += 0.5 * vec2(
+          cos(5.1123314 + 0.353 * uv2.y + speed * 0.131121),
+          sin(uv2.x - 0.113 * speed)
+        );
+        uv -= cos(uv.x + uv.y) - sin(uv.x * 0.711 - uv.y);
+      }
+
+      float contrast_mod = (0.25 * uContrast + 0.5 * uSpinAmount + 1.2);
+      float paint_res = min(2.0, max(0.0, length(uv) * 0.035 * contrast_mod));
+      float c1p = max(0.0, 1.0 - contrast_mod * abs(1.0 - paint_res));
+      float c2p = max(0.0, 1.0 - contrast_mod * abs(paint_res));
+      float c3p = 1.0 - min(1.0, c1p + c2p);
+      float light = (uLighting - 0.2) * max(c1p * 5.0 - 4.0, 0.0)
+                  + uLighting * max(c2p * 5.0 - 4.0, 0.0);
+
+      return (0.3 / uContrast) * uColor1
+           + (1.0 - 0.3 / uContrast)
+             * (uColor1 * c1p + uColor2 * c2p + vec4(c3p * uColor3.rgb, c3p * uColor1.a))
+           + light;
+    }
+
+    void main() {
+      vec2 uv = vUv * iResolution.xy;
+      gl_FragColor = effect(iResolution.xy, uv);
+    }
+  `;
+
+  // ─────────────────────────────────────────────
+  //  HELPERS
+  // ─────────────────────────────────────────────
+  function hexToVec4(hex) {
+    const s = hex.replace('#', '');
+    return [
+      parseInt(s.slice(0,2),16)/255,
+      parseInt(s.slice(2,4),16)/255,
+      parseInt(s.slice(4,6),16)/255,
+      s.length === 8 ? parseInt(s.slice(6,8),16)/255 : 1.0
+    ];
+  }
+
+  function compileShader(gl, type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS))
+      throw new Error(gl.getShaderInfoLog(sh));
+    return sh;
+  }
+
+  function createProgram(gl, vert, frag) {
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compileShader(gl, gl.VERTEX_SHADER,   vert));
+    gl.attachShader(prog, compileShader(gl, gl.FRAGMENT_SHADER, frag));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS))
+      throw new Error(gl.getProgramInfoLog(prog));
+    return prog;
+  }
+
+  // ─────────────────────────────────────────────
+  //  INIT WEBGL
+  // ─────────────────────────────────────────────
+  const canvas = document.getElementById('balatro-canvas');
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) { alert('WebGL not supported in this browser.'); }
+
+  gl.clearColor(0, 0, 0, 1);
+
+  const program = createProgram(gl, VERT, FRAG);
+  gl.useProgram(program);
+
+  // ── Full-screen Triangle (OGL Triangle equivalent) ──
+  // One triangle [-1,-1], [3,-1], [-1,3] covers the entire clip space
+  const positions = new Float32Array([-1,-1, 3,-1, -1,3]);
+  const uvs       = new Float32Array([ 0, 0, 2, 0,  0,2]);
+
+  function createBuffer(data) {
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    return buf;
+  }
+
+  const posBuf = createBuffer(positions);
+  const uvBuf  = createBuffer(uvs);
+
+  function bindAttrib(buf, name, size) {
+    const loc = gl.getAttribLocation(program, name);
+    if (loc < 0) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
+  }
+
+  bindAttrib(posBuf, 'position', 2);
+  bindAttrib(uvBuf,  'uv',       2);
+
+  // ── Uniform locations ──
+  const U = {};
+  [
+    'iTime','iResolution','uSpinRotation','uSpinSpeed','uOffset',
+    'uColor1','uColor2','uColor3','uContrast','uLighting',
+    'uSpinAmount','uPixelFilter','uSpinEase','uIsRotate','uMouse'
+  ].forEach(name => { U[name] = gl.getUniformLocation(program, name); });
+
+  // ── Apply config to uniforms ──
+  function applyUniforms() {
+    gl.uniform1f(U.uSpinRotation, CONFIG.spinRotation);
+    gl.uniform1f(U.uSpinSpeed,    CONFIG.spinSpeed);
+    gl.uniform2fv(U.uOffset,      CONFIG.offset);
+    gl.uniform4fv(U.uColor1,      hexToVec4(CONFIG.color1));
+    gl.uniform4fv(U.uColor2,      hexToVec4(CONFIG.color2));
+    gl.uniform4fv(U.uColor3,      hexToVec4(CONFIG.color3));
+    gl.uniform1f(U.uContrast,     CONFIG.contrast);
+    gl.uniform1f(U.uLighting,     CONFIG.lighting);
+    gl.uniform1f(U.uSpinAmount,   CONFIG.spinAmount);
+    gl.uniform1f(U.uPixelFilter,  CONFIG.pixelFilter);
+    gl.uniform1f(U.uSpinEase,     CONFIG.spinEase);
+    gl.uniform1i(U.uIsRotate,     CONFIG.isRotate ? 1 : 0);
+  }
+  applyUniforms();
+
+  // ── Mouse tracking ──
+  let mouse = [0.5, 0.5];
+  canvas.addEventListener('mousemove', e => {
+    if (!CONFIG.mouseInteraction) return;
+    const r = canvas.getBoundingClientRect();
+    mouse = [
+      (e.clientX - r.left) / r.width,
+      1.0 - (e.clientY - r.top) / r.height
+    ];
+  });
+  canvas.addEventListener('mouseleave', () => { mouse = [0.5, 0.5]; });
+
+  // ─────────────────────────────────────────────
+  //  RESIZE
+  // ─────────────────────────────────────────────
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = window.innerWidth  * dpr | 0;
+    const h = window.innerHeight * dpr | 0;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width  = w;
+      canvas.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+    gl.uniform3f(U.iResolution, gl.drawingBufferWidth, gl.drawingBufferHeight,
+                 gl.drawingBufferWidth / gl.drawingBufferHeight);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ─────────────────────────────────────────────
+  //  RENDER LOOP
+  // ─────────────────────────────────────────────
+  let rafId;
+  function render(timestamp) {
+    rafId = requestAnimationFrame(render);
+    gl.uniform1f(U.iTime, timestamp * 0.001);
+    gl.uniform2fv(U.uMouse, mouse);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  rafId = requestAnimationFrame(render);
+
+  // ─────────────────────────────────────────────
+  //  CONTROL CALLBACKS
+  // ─────────────────────────────────────────────
+  function updateUniform(key, value) {
+    const v = parseFloat(value);
+    CONFIG[key] = v;
+
+    // Update the displayed value
+    const valEl = document.getElementById(key + 'Val');
+    if (valEl) valEl.textContent = v.toFixed(key === 'pixelFilter' ? 0 : 2);
+
+    // Push to GPU
+    switch(key) {
+      case 'spinSpeed':   gl.uniform1f(U.uSpinSpeed,   v); break;
+      case 'spinAmount':  gl.uniform1f(U.uSpinAmount,  v); break;
+      case 'contrast':    gl.uniform1f(U.uContrast,    v); break;
+      case 'lighting':    gl.uniform1f(U.uLighting,    v); break;
+      case 'pixelFilter': gl.uniform1f(U.uPixelFilter, v); break;
+    }
+  }
+
+  function updateColor(key, hex) {
+    CONFIG[key] = hex;
+    const vec = hexToVec4(hex);
+    if      (key === 'color1') gl.uniform4fv(U.uColor1, vec);
+    else if (key === 'color2') gl.uniform4fv(U.uColor2, vec);
+    else if (key === 'color3') gl.uniform4fv(U.uColor3, vec);
+  }
+
+  function toggleRotate() {
+    CONFIG.isRotate = !CONFIG.isRotate;
+    gl.uniform1i(U.uIsRotate, CONFIG.isRotate ? 1 : 0);
+    const btn = document.getElementById('rotateBtn');
+    const icon = document.getElementById('rotateBtnIcon');
+    btn.classList.toggle('active', CONFIG.isRotate);
+    icon.textContent = CONFIG.isRotate ? '⏸' : '▶';
+    btn.childNodes[1].textContent = CONFIG.isRotate ? ' Stop Rotation' : ' Start Rotation';
+  }
+
+  // ─────────────────────────────────────────────
+  //  CUSTOM CURSOR + INTERACTIVE HOVER STATES
+  // ─────────────────────────────────────────────
+  const ring = document.getElementById('cursor-ring');
+  const dot  = document.getElementById('cursor-dot');
+
+  // Smooth ring position via rAF
+  let rx = 0, ry = 0, mx = 0, my = 0;
+  let cursorOn = false;
+
+  document.addEventListener('mousemove', e => {
+    mx = e.clientX; my = e.clientY;
+    dot.style.left = mx + 'px';
+    dot.style.top  = my + 'px';
+    if (!cursorOn) {
+      ring.style.opacity = '1';
+      dot.style.opacity  = '1';
+      cursorOn = true;
+    }
+  });
+  document.addEventListener('mouseleave', () => {
+    ring.style.opacity = '0';
+    dot.style.opacity  = '0';
+    cursorOn = false;
+  });
+
+  // Lag the ring slightly for a trailing feel
+  (function lagRing() {
+    rx += (mx - rx) * 0.12;
+    ry += (my - ry) * 0.12;
+    ring.style.left = rx + 'px';
+    ring.style.top  = ry + 'px';
+    requestAnimationFrame(lagRing);
+  })();
+
+  // Grow ring on interactive elements
+  document.querySelectorAll('input, button, summary').forEach(el => {
+    el.style.cursor = 'none';
+    el.addEventListener('mouseenter', () => {
+      ring.style.width       = '56px';
+      ring.style.height      = '56px';
+      ring.style.borderColor = 'rgba(168,85,247,0.7)';
+    });
+    el.addEventListener('mouseleave', () => {
+      ring.style.width       = '38px';
+      ring.style.height      = '38px';
+      ring.style.borderColor = 'rgba(255,255,255,0.4)';
+    });
+  });
+
+  </script>
+</body>
+</html>
