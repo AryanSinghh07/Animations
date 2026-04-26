@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bubble Menu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --nav-bg: rgba(255,255,255,0.1);
+      --nav-border: rgba(255,255,255,0.15);
+      --pill-bg: rgba(255,255,255,0.08);
+      --pill-border: rgba(255,255,255,0.12);
+      --pill-text: rgba(255,255,255,0.92);
+      --overlay-bg: rgba(8,8,10,0.97);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      font-family: 'Inter', sans-serif;
+      background: #080808;
+      overflow-x: hidden;
+    }
+
+    /* ── Demo hero content ── */
+    .hero {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px;
+      user-select: none; pointer-events: none;
+    }
+    .hero-eyebrow {
+      font-size: 0.72rem; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+    }
+    .hero-title {
+      font-size: clamp(2.4rem, 7vw, 6rem);
+      font-weight: 700; letter-spacing: -0.03em;
+      color: rgba(255,255,255,0.08);
+      text-align: center; line-height: 1.1;
+    }
+
+    /* ═══════════════════════════════
+       NAV BAR
+    ═══════════════════════════════ */
+    .bubble-nav {
+      position: fixed;
+      top: 24px; left: 0; right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      z-index: 1001;
+      pointer-events: none;
+    }
+
+    /* shared bubble style */
+    .bubble {
+      pointer-events: auto;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: var(--nav-bg);
+      border: 1px solid var(--nav-border);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+      border-radius: 9999px;
+      will-change: transform;
+    }
+
+    /* Logo bubble */
+    .logo-bubble {
+      height: 52px;
+      padding: 0 22px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .logo-icon {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.5) 100%);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo-icon svg { width: 14px; height: 14px; }
+    .logo-wordmark {
+      font-size: 0.9rem; font-weight: 600;
+      color: rgba(255,255,255,0.9);
+      letter-spacing: -0.01em;
+    }
+
+    /* Toggle bubble */
+    .toggle-bubble {
+      width: 52px; height: 52px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 6px;
+      border: none; cursor: pointer;
+      transition: box-shadow 0.3s, background 0.3s;
+    }
+    .toggle-bubble:hover {
+      background: rgba(255,255,255,0.16);
+      box-shadow: 0 4px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12);
+    }
+    .menu-line {
+      width: 22px; height: 1.5px;
+      background: rgba(255,255,255,0.85);
+      border-radius: 2px;
+      transition: transform 0.35s cubic-bezier(0.23,1,0.32,1),
+                  opacity  0.35s cubic-bezier(0.23,1,0.32,1),
+                  width    0.35s cubic-bezier(0.23,1,0.32,1);
+      transform-origin: center;
+    }
+    /* open state */
+    .toggle-bubble.open .line-1 { transform: translateY(3.75px) rotate(45deg); }
+    .toggle-bubble.open .line-2 { transform: translateY(-3.75px) rotate(-45deg); }
+
+    /* ═══════════════════════════════
+       OVERLAY
+    ═══════════════════════════════ */
+    .menu-overlay {
+      position: fixed; inset: 0;
+      background: var(--overlay-bg);
+      display: none;             /* GSAP controls visibility */
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      overflow: hidden;
+    }
+
+    /* Background grid lines */
+    .menu-overlay::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 80px 80px;
+      pointer-events: none;
+    }
+
+    /* ═══════════════════════════════
+       PILL LIST
+    ═══════════════════════════════ */
+    .pill-list {
+      list-style: none;
+      width: 100%; max-width: 1400px;
+      padding: 0 32px;
+      margin: 0 auto;
+      display: flex; flex-wrap: wrap;
+      position: relative; z-index: 1;
+    }
+
+    .pill-col {
+      flex: 0 0 calc(100% / 3);
+      box-sizing: border-box;
+      padding: 6px;
+      display: flex;
+    }
+
+    /* 4th of 5: offset by 1 col */
+    .pill-col:nth-child(4):nth-last-child(2) { margin-left: calc(100% / 6); }
+    /* 4th if last: offset by 2 cols */
+    .pill-col:nth-child(4):last-child         { margin-left: calc(100% / 3); }
+
+    /* ── Pill link ── */
+    .pill-link {
+      width: 100%;
+      min-height: 150px;
+      border-radius: 9999px;
+      text-decoration: none;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+      background: var(--pill-bg);
+      border: 1px solid var(--pill-border);
+      box-shadow: 0 2px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+      cursor: pointer;
+      will-change: transform;
+      transition: background 0.35s ease, border-color 0.35s ease,
+                  box-shadow 0.35s ease;
+      /* rotation applied via CSS var */
+      transform: rotate(var(--rot));
+    }
+
+    /* colour fill layer (pseudo) */
+    .pill-link::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: var(--hover-bg, transparent);
+      border-radius: inherit;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+    .pill-link:hover::before { opacity: 1; }
+    .pill-link:hover {
+      border-color: rgba(255,255,255,0.2);
+      box-shadow: 0 8px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .pill-link:active { transform: rotate(var(--rot)) scale(0.96); }
+
+    /* label */
+    .pill-label {
+      position: relative; z-index: 1;
+      font-size: clamp(1.6rem, 3.5vw, 3.6rem);
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      color: var(--pill-text);
+      transition: color 0.35s ease;
+      will-change: transform, opacity;
+      line-height: 1;
+    }
+    .pill-link:hover .pill-label { color: var(--hover-text, var(--pill-text)); }
+
+    /* pill index number */
+    .pill-num {
+      position: absolute;
+      top: 22px; left: 28px;
+      font-size: 0.65rem; font-weight: 500;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.2);
+      transition: color 0.35s ease;
+      z-index: 1;
+    }
+    .pill-link:hover .pill-num { color: rgba(255,255,255,0.4); }
+
+    /* ── Responsive ── */
+    @media (max-width: 899px) {
+      .menu-overlay { align-items: flex-start; padding-top: 110px; }
+      .pill-list { row-gap: 6px; }
+      .pill-col {
+        flex: 0 0 100% !important;
+        margin-left: 0 !important;
+        padding: 4px 0;
+      }
+      .pill-link {
+        min-height: 72px;
+        transform: none !important;
+        border-radius: 20px;
+        justify-content: flex-start;
+        padding: 0 28px;
+      }
+      .pill-link:active { transform: scale(0.98) !important; }
+      .pill-label { font-size: clamp(1.3rem, 5vw, 2rem); }
+    }
+
+    @media (min-width: 900px) {
+      .bubble-nav { top: 28px; padding: 0 36px; }
+      .logo-bubble { height: 58px; padding: 0 28px; }
+      .toggle-bubble { width: 58px; height: 58px; }
+    }
+
+    /* ── Custom cursor ── */
+    body { cursor: none; }
+    #cursor-ring {
+      position: fixed; pointer-events: none; z-index: 9999;
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.35);
+      transform: translate(-50%,-50%);
+      transition: width .18s, height .18s, border-color .18s, opacity .28s;
+      opacity: 0; will-change: left,top;
+    }
+    #cursor-dot {
+      position: fixed; pointer-events: none; z-index: 10000;
+      width: 5px; height: 5px; background: #fff; border-radius: 50%;
+      transform: translate(-50%,-50%); opacity: 0;
+      transition: opacity .28s; will-change: left,top;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Cursor -->
+<div id="cursor-ring"></div>
+<div id="cursor-dot"></div>
+
+<!-- Hero background text -->
+<div class="hero" aria-hidden="true">
+  <span class="hero-eyebrow">Open the menu</span>
+  <h1 class="hero-title">Bubble<br>Menu</h1>
+</div>
+
+<!-- ── Nav ── -->
+<nav class="bubble-nav" aria-label="Main navigation">
+
+  <!-- Logo -->
+  <div class="bubble logo-bubble" aria-label="Logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="1" width="5" height="5" rx="1.5" fill="#080808"/>
+        <rect x="8" y="1" width="5" height="5" rx="1.5" fill="#080808"/>
+        <rect x="1" y="8" width="5" height="5" rx="1.5" fill="#080808"/>
+        <rect x="8" y="8" width="5" height="5" rx="1.5" fill="#080808"/>
+      </svg>
+    </div>
+    <span class="logo-wordmark">Animation</span>
+  </div>
+
+  <!-- Hamburger -->
+  <button class="bubble toggle-bubble" id="menuToggle"
+          aria-label="Toggle menu" aria-expanded="false">
+    <span class="menu-line line-1"></span>
+    <span class="menu-line line-2"></span>
+  </button>
+</nav>
+
+<!-- ── Overlay ── -->
+<div class="menu-overlay" id="menuOverlay" aria-hidden="true">
+  <ul class="pill-list" role="menu" aria-label="Navigation links" id="pillList"></ul>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════
+const MENU_ITEMS = [
+  { label: 'home',     href: '#', rotation: -8,  hoverBg: '#3b82f6', hoverText: '#fff' },
+  { label: 'about',    href: '#', rotation:  8,  hoverBg: '#10b981', hoverText: '#fff' },
+  { label: 'projects', href: '#', rotation: -6,  hoverBg: '#f59e0b', hoverText: '#fff' },
+  { label: 'blog',     href: '#', rotation:  10, hoverBg: '#ef4444', hoverText: '#fff' },
+  { label: 'contact',  href: '#', rotation: -8,  hoverBg: '#8b5cf6', hoverText: '#fff' },
+];
+
+const ANIM = {
+  ease:     'back.out(1.5)',
+  duration:  0.5,
+  stagger:   0.12,
+};
+
+// ═══════════════════════════════════════════
+//  BUILD PILLS
+// ═══════════════════════════════════════════
+const pillList   = document.getElementById('pillList');
+const bubbleEls  = [];
+const labelEls   = [];
+
+MENU_ITEMS.forEach((item, idx) => {
+  const li = document.createElement('li');
+  li.className = 'pill-col';
+  li.setAttribute('role', 'none');
+
+  const a = document.createElement('a');
+  a.className  = 'pill-link';
+  a.href       = item.href;
+  a.setAttribute('role', 'menuitem');
+  a.setAttribute('aria-label', item.label);
+  a.style.setProperty('--rot',        `${item.rotation}deg`);
+  a.style.setProperty('--hover-bg',   item.hoverBg);
+  a.style.setProperty('--hover-text', item.hoverText);
+
+  // Index number
+  const num = document.createElement('span');
+  num.className   = 'pill-num';
+  num.textContent = String(idx + 1).padStart(2, '0');
+
+  // Label
+  const lbl = document.createElement('span');
+  lbl.className   = 'pill-label';
+  lbl.textContent = item.label;
+
+  a.appendChild(num);
+  a.appendChild(lbl);
+  li.appendChild(a);
+  pillList.appendChild(li);
+
+  bubbleEls.push(a);
+  labelEls.push(lbl);
+});
+
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+let isOpen     = false;
+let canClose   = true;
+
+// ═══════════════════════════════════════════
+//  TOGGLE
+// ═══════════════════════════════════════════
+const overlay    = document.getElementById('menuOverlay');
+const toggleBtn  = document.getElementById('menuToggle');
+
+function openMenu() {
+  isOpen = true;
+  canClose = false;
+
+  toggleBtn.classList.add('open');
+  toggleBtn.setAttribute('aria-expanded', 'true');
+  overlay.setAttribute('aria-hidden', 'false');
+
+  // Show overlay
+  overlay.style.display = 'flex';
+
+  gsap.killTweensOf([...bubbleEls, ...labelEls]);
+
+  // Start hidden
+  gsap.set(bubbleEls, { scale: 0, transformOrigin: '50% 50%' });
+  gsap.set(labelEls,  { y: 28, autoAlpha: 0 });
+
+  // Apply desktop rotation
+  applyRotation();
+
+  // Animate in
+  bubbleEls.forEach((el, i) => {
+    const jitter = gsap.utils.random(-0.05, 0.05);
+    const delay  = i * ANIM.stagger + jitter;
+    const tl     = gsap.timeline({ delay });
+
+    tl.to(el,       { scale: 1,    duration: ANIM.duration, ease: ANIM.ease });
+    tl.to(labelEls[i], {
+      y: 0, autoAlpha: 1,
+      duration: ANIM.duration * 0.85,
+      ease: 'power3.out'
+    }, `-=${ANIM.duration * 0.85}`);
+
+    // Unlock close after last pill is visible
+    if (i === bubbleEls.length - 1) {
+      tl.call(() => { canClose = true; });
+    }
+  });
+}
+
+function closeMenu() {
+  if (!canClose) return;
+  isOpen = false;
+
+  toggleBtn.classList.remove('open');
+  toggleBtn.setAttribute('aria-expanded', 'false');
+  overlay.setAttribute('aria-hidden', 'true');
+
+  gsap.killTweensOf([...bubbleEls, ...labelEls]);
+
+  gsap.to(labelEls, { y: 24, autoAlpha: 0, duration: 0.2, ease: 'power3.in' });
+  gsap.to(bubbleEls, {
+    scale: 0,
+    duration: 0.2,
+    ease: 'power3.in',
+    onComplete: () => { overlay.style.display = 'none'; }
+  });
+}
+
+toggleBtn.addEventListener('click', () => {
+  isOpen ? closeMenu() : openMenu();
+});
+
+// Close on overlay background click
+overlay.addEventListener('click', e => {
+  if (e.target === overlay) closeMenu();
+});
+
+// Close on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && isOpen) closeMenu();
+});
+
+// ═══════════════════════════════════════════
+//  ROTATION — strip on mobile
+// ═══════════════════════════════════════════
+function applyRotation() {
+  const isDesktop = window.innerWidth >= 900;
+  bubbleEls.forEach((el, i) => {
+    gsap.set(el, { rotation: isDesktop ? MENU_ITEMS[i].rotation : 0 });
+  });
+}
+
+window.addEventListener('resize', () => { if (isOpen) applyRotation(); });
+
+// ═══════════════════════════════════════════
+//  CUSTOM CURSOR
+// ═══════════════════════════════════════════
+const ring = document.getElementById('cursor-ring');
+const dot  = document.getElementById('cursor-dot');
+let rx = 0, ry = 0, mx = 0, my = 0, cursorOn = false;
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  dot.style.left = mx + 'px'; dot.style.top = my + 'px';
+  if (!cursorOn) {
+    ring.style.opacity = '1'; dot.style.opacity = '1';
+    cursorOn = true;
+  }
+});
+document.addEventListener('mouseleave', () => {
+  ring.style.opacity = '0'; dot.style.opacity = '0';
+  cursorOn = false;
+});
+(function lagRing() {
+  rx += (mx - rx) * 0.13;
+  ry += (my - ry) * 0.13;
+  ring.style.left = rx + 'px';
+  ring.style.top  = ry + 'px';
+  requestAnimationFrame(lagRing);
+})();
+
+document.querySelectorAll('.pill-link, .toggle-bubble, .logo-bubble').forEach(el => {
+  el.style.cursor = 'none';
+  el.addEventListener('mouseenter', () => {
+    ring.style.width       = '56px';
+    ring.style.height      = '56px';
+    ring.style.borderColor = 'rgba(255,255,255,0.65)';
+  });
+  el.addEventListener('mouseleave', () => {
+    ring.style.width       = '36px';
+    ring.style.height      = '36px';
+    ring.style.borderColor = 'rgba(255,255,255,0.35)';
+  });
+});
+</script>
+</body>
+</html>
