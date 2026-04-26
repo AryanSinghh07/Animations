@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bounce Cards</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      font-family: 'Inter', sans-serif;
+      background: #0d0d0d;
+    }
+
+    /* ── Page layout ── */
+    .page {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+      z-index: 10;
+    }
+
+    /* ── Label ── */
+    .label {
+      font-size: 0.78rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
+    }
+
+    /* ── BounceCards container ── */
+    #bounce-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Individual card ── */
+    .card {
+      position: absolute;
+      width: 200px;
+      aspect-ratio: 1 / 1;
+      border: 8px solid #fff;
+      border-radius: 30px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      /* start hidden — GSAP animates scale from 0 */
+      transform: scale(0);
+      cursor: pointer;
+      will-change: transform;
+    }
+    .card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* ── Replay button ── */
+    .replay-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 50px;
+      padding: 10px 22px;
+      color: rgba(255,255,255,0.65);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .2s, border-color .2s, color .2s;
+    }
+    .replay-btn:hover {
+      background: rgba(255,255,255,0.14);
+      border-color: rgba(255,255,255,0.25);
+      color: #fff;
+    }
+    .replay-btn svg { flex-shrink: 0; }
+
+    /* ── Custom cursor ── */
+    body { cursor: none; }
+    #cursor-ring {
+      position: fixed; pointer-events: none; z-index: 9999;
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.38);
+      transform: translate(-50%,-50%);
+      transition: width .18s, height .18s, border-color .18s, opacity .3s;
+      opacity: 0; mix-blend-mode: screen;
+    }
+    #cursor-dot {
+      position: fixed; pointer-events: none; z-index: 10000;
+      width: 5px; height: 5px; background: #fff; border-radius: 50%;
+      transform: translate(-50%,-50%); opacity: 0; transition: opacity .3s;
+    }
+  </style>
+</head>
+<body>
+
+
+<!-- Cursor -->
+<div id="cursor-ring"></div>
+<div id="cursor-dot"></div>
+
+<!-- Page -->
+<div class="page">
+  <span class="label">Hover to interact</span>
+
+  <div id="bounce-container"></div>
+
+  <button class="replay-btn" id="replayBtn">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+      <path d="M3 3v5h5"/>
+    </svg>
+    Replay Animation
+  </button>
+</div>
+
+<script>
+
+
+// ═══════════════════════════════════════════════
+//  BOUNCE CARDS — vanilla JS port of React component
+// ═══════════════════════════════════════════════
+
+// ── Config ─────────────────────────────────────
+const IMAGES = [
+  'https://picsum.photos/seed/archi/400/400',
+  'https://picsum.photos/seed/nature9/400/400',
+  'https://picsum.photos/seed/city44/400/400',
+  'https://picsum.photos/seed/ocean7/400/400',
+  'https://picsum.photos/seed/forest3/400/400',
+];
+
+const CONTAINER_W   = 500;
+const CONTAINER_H   = 260;
+const ANIM_DELAY    = 0.4;
+const ANIM_STAGGER  = 0.06;
+const EASE_TYPE     = 'elastic.out(1, 0.8)';
+const ENABLE_HOVER  = true;
+
+const TRANSFORM_STYLES = [
+  'rotate(10deg) translate(-170px)',
+  'rotate(5deg)  translate(-85px)',
+  'rotate(-3deg)',
+  'rotate(-10deg) translate(85px)',
+  'rotate(2deg)   translate(170px)',
+];
+
+// ── Build DOM ──────────────────────────────────
+const container = document.getElementById('bounce-container');
+container.style.width  = CONTAINER_W + 'px';
+container.style.height = CONTAINER_H + 'px';
+
+const cardEls = IMAGES.map((src, idx) => {
+  const card = document.createElement('div');
+  card.className = `card card-${idx}`;
+  card.style.transform = TRANSFORM_STYLES[idx] || 'none';
+
+  const img = document.createElement('img');
+  img.src = src;
+  img.alt = `card-${idx}`;
+  img.loading = 'lazy';
+  img.width  = 200;
+  img.height = 200;
+
+  card.appendChild(img);
+  container.appendChild(card);
+  return card;
+});
+
+// ── Helpers (direct port from React source) ────
+function getNoRotationTransform(transformStr) {
+  if (/rotate\([\s\S]*?\)/.test(transformStr)) {
+    return transformStr.replace(/rotate\([\s\S]*?\)/, 'rotate(0deg)');
+  } else if (transformStr === 'none') {
+    return 'rotate(0deg)';
+  } else {
+    return `${transformStr} rotate(0deg)`;
+  }
+}
+
+function getPushedTransform(baseTransform, offsetX) {
+  const translateRegex = /translate\(([-0-9.]+)px\)/;
+  const match = baseTransform.match(translateRegex);
+  if (match) {
+    const newX = parseFloat(match[1]) + offsetX;
+    return baseTransform.replace(translateRegex, `translate(${newX}px)`);
+  } else {
+    return baseTransform === 'none'
+      ? `translate(${offsetX}px)`
+      : `${baseTransform} translate(${offsetX}px)`;
+  }
+}
+
+// ── Animate in (runs on load & replay) ─────────
+function runEntrance() {
+  gsap.fromTo(
+    '.card',
+    { scale: 0 },
+    {
+      scale: 1,
+      stagger: ANIM_STAGGER,
+      ease:    EASE_TYPE,
+      delay:   ANIM_DELAY,
+    }
+  );
+}
+runEntrance();
+
+// ── Hover: push siblings ────────────────────────
+function pushSiblings(hoveredIdx) {
+  if (!ENABLE_HOVER) return;
+  IMAGES.forEach((_, i) => {
+    const el = cardEls[i];
+    gsap.killTweensOf(el);
+
+    const base = TRANSFORM_STYLES[i] || 'none';
+
+    if (i === hoveredIdx) {
+      gsap.to(el, {
+        transform: getNoRotationTransform(base),
+        duration: 0.4,
+        ease: 'back.out(1.4)',
+        overwrite: 'auto',
+      });
+    } else {
+      const offsetX  = i < hoveredIdx ? -160 : 160;
+      const pushed   = getPushedTransform(base, offsetX);
+      const distance = Math.abs(hoveredIdx - i);
+      gsap.to(el, {
+        transform: pushed,
+        duration: 0.4,
+        ease: 'back.out(1.4)',
+        delay: distance * 0.05,
+        overwrite: 'auto',
+      });
+    }
+  });
+}
+
+// ── Hover: reset siblings ───────────────────────
+function resetSiblings() {
+  if (!ENABLE_HOVER) return;
+  IMAGES.forEach((_, i) => {
+    const el = cardEls[i];
+    gsap.killTweensOf(el);
+    gsap.to(el, {
+      transform: TRANSFORM_STYLES[i] || 'none',
+      duration: 0.4,
+      ease: 'back.out(1.4)',
+      overwrite: 'auto',
+    });
+  });
+}
+
+// ── Bind hover events ───────────────────────────
+cardEls.forEach((card, idx) => {
+  card.addEventListener('mouseenter', () => pushSiblings(idx));
+  card.addEventListener('mouseleave', resetSiblings);
+});
+
+// ── Replay button ───────────────────────────────
+document.getElementById('replayBtn').addEventListener('click', () => {
+  gsap.set('.card', { scale: 0 });
+  runEntrance();
+});
+
+
+// ═══════════════════════════════════════════════
+//  CUSTOM CURSOR
+// ═══════════════════════════════════════════════
+const ring = document.getElementById('cursor-ring');
+const dot  = document.getElementById('cursor-dot');
+let rx = 0, ry = 0, mx = 0, my = 0, cursorOn = false;
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  dot.style.left = mx + 'px'; dot.style.top = my + 'px';
+  if (!cursorOn) {
+    ring.style.opacity = '1'; dot.style.opacity = '1';
+    cursorOn = true;
+  }
+});
+document.addEventListener('mouseleave', () => {
+  ring.style.opacity = '0'; dot.style.opacity = '0';
+  cursorOn = false;
+});
+(function lagRing() {
+  rx += (mx - rx) * 0.12; ry += (my - ry) * 0.12;
+  ring.style.left = rx + 'px'; ring.style.top = ry + 'px';
+  requestAnimationFrame(lagRing);
+})();
+
+document.querySelectorAll('.card, button').forEach(el => {
+  el.style.cursor = 'none';
+  el.addEventListener('mouseenter', () => {
+    ring.style.width = '52px'; ring.style.height = '52px';
+    ring.style.borderColor = 'rgba(255,255,255,0.7)';
+  });
+  el.addEventListener('mouseleave', () => {
+    ring.style.width = '36px'; ring.style.height = '36px';
+    ring.style.borderColor = 'rgba(255,255,255,0.38)';
+  });
+});
+</script>
+</body>
+</html>
