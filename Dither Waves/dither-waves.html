@@ -120,7 +120,7 @@
     /* ── Controls ── */
     .controls {
       position: fixed; bottom: 24px; right: 24px;
-      z-index: 20;
+      z-index: 20; pointer-events: auto;
       background: rgba(8,8,16,0.75);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
@@ -129,15 +129,6 @@
       padding: 14px 18px;
       width: 230px;
     }
-    .controls summary {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.68rem; font-weight: 400;
-      letter-spacing: 0.12em; text-transform: uppercase;
-      color: rgba(255,255,255,0.45); cursor: pointer; user-select: none;
-      list-style: none;
-    }
-    .controls summary::after { content: ' ▾'; opacity: .5; }
-    details[open] summary::after { content: ' ▴'; }
     .ctrl-grid { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
     .ctrl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .ctrl-row label { font-size: 0.7rem; color: rgba(255,255,255,0.38); min-width: 80px; }
@@ -160,8 +151,7 @@
 </div>
 
 <!-- Controls -->
-<details class="controls">
-  <summary>Controls</summary>
+<div class="controls" role="region" aria-label="Controls">
   <div class="ctrl-grid">
     <div class="ctrl-row">
       <label>Wave Speed</label>
@@ -194,7 +184,7 @@
       <span id="mouseRadiusVal">0.30</span>
     </div>
   </div>
-</details>
+</div>
 
 <script>
 // ═══════════════════════════════════════════════
