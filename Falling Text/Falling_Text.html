@@ -14,42 +14,93 @@
     html, body {
       width: 100%; height: 100%;
       font-family: 'Inter', sans-serif;
-      background: #080810;
+      background:
+        radial-gradient(circle at top, rgba(168,85,247,0.18), transparent 30%),
+        radial-gradient(circle at 80% 20%, rgba(59,130,246,0.12), transparent 24%),
+        linear-gradient(180deg, #090912 0%, #06070d 100%);
       color: #fff;
       overflow-x: hidden;
     }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: radial-gradient(circle at center, black 35%, transparent 100%);
+      opacity: 0.35;
+    }
 
-    /* ── Page layout ── */
     .page {
-      max-width: 1000px;
+      max-width: 860px;
       margin: 0 auto;
-      padding: 60px 32px 80px;
+      padding: 72px 24px 88px;
       display: flex;
       flex-direction: column;
-      gap: 64px;
+      gap: 24px;
     }
 
-    /* ── Section headers ── */
-    .section-label {
-      font-size: 0.65rem;
-      font-weight: 500;
-      letter-spacing: 0.2em;
+    .hero {
+      display: grid;
+      gap: 12px;
+      text-align: center;
+      justify-items: center;
+      padding-bottom: 4px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.62);
+      font-size: 0.7rem;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
-      color: rgba(168,85,247,0.7);
-      margin-bottom: 12px;
     }
 
-    /* ── Falling Text wrapper ── */
+    .hero h1 {
+      font-family:'Bebas Neue',sans-serif;
+      font-size: clamp(3rem, 8vw, 5.5rem);
+      letter-spacing: 0.02em;
+      line-height: 0.92;
+      text-wrap: balance;
+    }
+
+    .hero p {
+      max-width: 54ch;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.7;
+      font-size: 0.98rem;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 0 4px;
+    }
+
     .falling-text-container {
       position: relative;
       width: 100%;
       cursor: pointer;
       text-align: center;
-      padding-top: 32px;
+      padding: 34px 20px 24px;
       overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 16px;
-      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 28px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)),
+        rgba(12,14,24,0.9);
+      box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+      backdrop-filter: blur(10px);
     }
 
     /* The text div — words live here */
@@ -57,6 +108,7 @@
       display: inline-block;
       line-height: 1.4;
       pointer-events: none;
+      max-width: 100%;
     }
 
     /* Matter.js canvas sits behind text */
@@ -70,53 +122,62 @@
     /* Word spans */
     .word-span {
       display: inline-block;
-      margin: 0 3px;
+      margin: 0 4px;
       user-select: none;
       position: relative;
       z-index: 1;
       white-space: nowrap;
     }
     .word-span.highlight {
-      color: #a78bfa;
+      color: #f5d0fe;
       font-weight: 700;
+      text-shadow: 0 0 18px rgba(216,180,254,0.22);
     }
 
-    /* ── Trigger pill button ── */
     .trigger-hint {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: rgba(255,255,255,0.25);
-      margin-bottom: 12px;
-      padding: 6px 14px;
+      color: rgba(255,255,255,0.56);
+      padding: 7px 12px;
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 9999px;
+      background: rgba(255,255,255,0.03);
     }
-    .trigger-hint svg { opacity: .5; }
+    .trigger-hint svg { opacity: .7; }
 
-    /* ── Reset button ── */
     .reset-btn {
-      margin-top: 16px;
-      margin-bottom: 20px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
       font-family: 'Inter', sans-serif;
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: rgba(255,255,255,0.35);
-      background: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.62);
+      background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 9999px;
-      padding: 6px 16px;
+      padding: 7px 14px;
       cursor: pointer;
-      transition: background .2s, color .2s;
+      transition: transform .2s, background .2s, color .2s, border-color .2s;
     }
-    .reset-btn:hover { background: rgba(168,85,247,0.15); color: #c084fc; border-color: rgba(168,85,247,0.3); }
+    .reset-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.16); }
+
+    .status-note {
+      font-size: 0.76rem;
+      color: rgba(255,255,255,0.42);
+      letter-spacing: 0.02em;
+    }
+
+    @media (max-width: 640px) {
+      .page { padding: 56px 16px 72px; }
+      .toolbar { align-items: flex-start; }
+      .falling-text-container { padding: 28px 14px 20px; border-radius: 22px; }
+    }
 
   </style>
 </head>
@@ -124,31 +185,27 @@
 
 <div class="page">
 
-  <!-- ── Demo 1: Large headline ── -->
-  <div>
-    <p class="section-label">Demo — Click anywhere in the box</p>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-      <span class="trigger-hint">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/>
-          <path d="M6 4v2.5L7.5 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-        </svg>
-        <span id="triggerHintText">click to activate</span>
-      </span>
-      <button class="reset-btn" id="resetBtn">
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-          <path d="M9 5A4 4 0 1 1 7.5 1.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-          <path d="M6.5 1 8 1.8l-.8 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Reset
-      </button>
-    </div>
+  <header class="hero">
+    <span class="eyebrow">Physics animation</span>
+    <h1>Falling Text</h1>
+    <p>Click the box and the words drop into place with soft, playful motion. You can drag them around once the simulation starts.</p>
+  </header>
 
-    <!-- The falling text container -->
-    <div id="fallingContainer" class="falling-text-container" style="height: 320px;">
-      <div id="fallingWords" class="falling-text-words" style="font-size: 1.8rem;"></div>
-      <div id="fallingCanvas" class="falling-text-canvas"></div>
-    </div>
+  <div class="toolbar">
+    <span class="status-note">Click the panel to start the effect.</span>
+    <button class="reset-btn" id="resetBtn">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path d="M9 5A4 4 0 1 1 7.5 1.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        <path d="M6.5 1 8 1.8l-.8 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Reset
+    </button>
+  </div>
+
+  <!-- The falling text container -->
+  <div id="fallingContainer" class="falling-text-container" style="height: 340px;">
+    <div id="fallingWords" class="falling-text-words" style="font-size: 1.9rem;"></div>
+    <div id="fallingCanvas" class="falling-text-canvas"></div>
   </div>
 
 </div>
@@ -167,7 +224,7 @@ const CONFIG = {
   wireframes:              false,
   gravity:                 1,
   mouseConstraintStiffness: 0.2,
-  fontSize:                '1.8rem',
+  fontSize:                '1.9rem',
 };
 
 // DOM refs
@@ -199,19 +256,16 @@ function startPhysics() {
   if (effectStarted) return;
   effectStarted = true;
 
-  const { Engine, Render, Runner, World, Bodies, Mouse, MouseConstraint, Body, Events } = Matter;
+  const { Engine, Render, Runner, World, Bodies, Mouse, MouseConstraint, Body } = Matter;
 
-  const rect   = containerEl.getBoundingClientRect();
   const width  = containerEl.offsetWidth;
   const height = containerEl.offsetHeight;
 
   if (width <= 0 || height <= 0) return;
 
-  // Engine
   const engine = Engine.create();
   engine.gravity.y = CONFIG.gravity;
 
-  // Renderer (transparent canvas for mouse events)
   const render = Render.create({
     element: canvasEl,
     engine,
@@ -223,14 +277,12 @@ function startPhysics() {
     }
   });
 
-  // Boundaries — exact same as React source
-  const bOpts = { isStatic: true, render: { fillStyle: 'transparent', strokeStyle: 'rgba(168,85,247,0.4)' } };
+  const bOpts = { isStatic: true, render: { fillStyle: 'transparent', strokeStyle: 'rgba(255,255,255,0.16)' } };
   const floor    = Bodies.rectangle(width / 2, height + 25, width, 50, bOpts);
   const leftWall = Bodies.rectangle(-25,        height / 2,  50, height, bOpts);
-  const rightWall= Bodies.rectangle(width + 25, height / 2,  50, height, bOpts);
+  const rightWall = Bodies.rectangle(width + 25, height / 2,  50, height, bOpts);
   const ceiling  = Bodies.rectangle(width / 2, -25,          width, 50, bOpts);
 
-  // Word bodies
   const containerRect = containerEl.getBoundingClientRect();
   const wordSpans = wordsEl.querySelectorAll('.word-span');
 
@@ -240,27 +292,25 @@ function startPhysics() {
     const y = r.top  - containerRect.top  + r.height / 2;
 
     const body = Bodies.rectangle(x, y, r.width, r.height, {
-      render:      { fillStyle: 'transparent', strokeStyle: 'rgba(168,85,247,0.5)' },
-      restitution: 0.8,
-      frictionAir: 0.01,
+      render:      { fillStyle: 'transparent', strokeStyle: 'rgba(255,255,255,0.22)' },
+      restitution: 0.78,
+      frictionAir: 0.012,
       friction:    0.2,
     });
 
-    Body.setVelocity(body,        { x: (Math.random() - 0.5) * 5, y: 0 });
-    Body.setAngularVelocity(body,   (Math.random() - 0.5) * 0.05);
+    Body.setVelocity(body, { x: (Math.random() - 0.5) * 5, y: 0 });
+    Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.05);
 
-    // Switch span to absolute — positioned by physics from now on
-    elem.style.position  = 'absolute';
-    elem.style.left      = `${x}px`;
-    elem.style.top       = `${y}px`;
+    elem.style.position = 'absolute';
+    elem.style.left = `${x}px`;
+    elem.style.top = `${y}px`;
     elem.style.transform = 'translate(-50%, -50%)';
 
     return { elem, body };
   });
 
-  // Mouse constraint
   const mouse = Mouse.create(containerEl);
-  const mc    = MouseConstraint.create(engine, {
+  const mc = MouseConstraint.create(engine, {
     mouse,
     constraint: { stiffness: CONFIG.mouseConstraintStiffness, render: { visible: false } }
   });
@@ -272,19 +322,17 @@ function startPhysics() {
   Runner.run(runner, engine);
   Render.run(render);
 
-  // Sync DOM to physics positions
   function updateLoop() {
     wordBodies.forEach(({ body, elem }) => {
       const { x, y } = body.position;
-      elem.style.left      = `${x}px`;
-      elem.style.top       = `${y}px`;
+      elem.style.left = `${x}px`;
+      elem.style.top = `${y}px`;
       elem.style.transform = `translate(-50%, -50%) rotate(${body.angle}rad)`;
     });
     rafId = requestAnimationFrame(updateLoop);
   }
   rafId = requestAnimationFrame(updateLoop);
 
-  // Cleanup function (used by reset)
   matterCleanup = () => {
     cancelAnimationFrame(rafId);
     Render.stop(render);
@@ -301,8 +349,7 @@ function startPhysics() {
 //  Trigger setup
 // ─────────────────────────────────────────────────
 function setupTrigger() {
-  // Remove old listeners / observers
-  containerEl.onclick      = null;
+  containerEl.onclick = null;
   containerEl.onmouseenter = null;
   if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
 
