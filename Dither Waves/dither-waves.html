@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dither Waves</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300..500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #080810; overflow: hidden; }
+
+    /* ── Canvas (full-screen, sits behind everything) ── */
+    #glCanvas {
+      position: fixed; inset: 0;
+      width: 100vw; height: 100vh; display: block;
+    }
+
+    /* ── Grain texture overlay ── */
+    .grain {
+      position: fixed; inset: 0; pointer-events: none; z-index: 2;
+      opacity: 0.018;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    }
+
+    /* ── Thin neon rule ── */
+    .neon-rule {
+      position: fixed; top: 64px; left: 0; right: 0;
+      height: 1px;
+      background: rgba(168,85,247,0.18);
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 10; pointer-events: none;
+    }
+    .hero-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(54px, 20vw, 290px);
+      line-height: 0.88;
+      letter-spacing: -0.02em;
+      color: #fff;
+      text-align: center;
+      user-select: none;
+    }
+    /* individual letter wrapper for overflow clip */
+    .hero-title .char-wrap {
+      display: inline-block;
+      overflow: hidden;
+      line-height: inherit;
+      vertical-align: top;
+    }
+    .hero-title .char-inner {
+      display: inline-block;
+      cursor: default;
+      color: #fff;
+      transition: none;
+    }
+
+    /* ── Bottom bar ── */
+    .hero-bottom {
+      position: fixed;
+      left: clamp(24px,4vw,48px);
+      right: clamp(24px,4vw,48px);
+      bottom: clamp(24px,4vh,48px);
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .tagline {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(14px,2.8vw,36px);
+      letter-spacing: 0.02em;
+      color: rgba(255,255,255,0.32);
+      display: block;
+      margin-bottom: 6px;
+    }
+    .meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.15);
+    }
+    .cta-btn {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 28px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      text-decoration: none;
+      color: #fff;
+      background: #a855f7;
+      box-shadow: 0 0 20px rgba(168,85,247,0.5);
+      border: none;
+      cursor: pointer;
+      transition: background .25s, box-shadow .25s;
+    }
+    .cta-btn:hover {
+      background: #9333ea;
+      box-shadow: 0 0 36px rgba(168,85,247,0.8);
+    }
+    .cta-arrow {
+      transition: transform .25s;
+    }
+    .cta-btn:hover .cta-arrow { transform: translateX(4px); }
+
+    /* ── Controls ── */
+    .controls {
+      position: fixed; bottom: 24px; right: 24px;
+      z-index: 20;
+      background: rgba(8,8,16,0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(168,85,247,0.2);
+      border-radius: 12px;
+      padding: 14px 18px;
+      width: 230px;
+    }
+    .controls summary {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem; font-weight: 400;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(255,255,255,0.45); cursor: pointer; user-select: none;
+      list-style: none;
+    }
+    .controls summary::after { content: ' ▾'; opacity: .5; }
+    details[open] summary::after { content: ' ▴'; }
+    .ctrl-grid { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
+    .ctrl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .ctrl-row label { font-size: 0.7rem; color: rgba(255,255,255,0.38); min-width: 80px; }
+    .ctrl-row input[type=range] { flex: 1; accent-color: #a855f7; height: 2px; cursor: pointer; }
+    .ctrl-row span { font-size: 0.65rem; color: rgba(255,255,255,0.25); min-width: 28px; text-align: right; }
+  </style>
+</head>
+<body>
+
+<!-- WebGL canvas -->
+<canvas id="glCanvas"></canvas>
+
+<!-- Grain -->
+<div class="grain"></div>
+<div class="neon-rule"></div>
+
+<!-- Hero title -->
+<div class="hero" id="hero">
+  <h1 class="hero-title" id="heroTitle" aria-label="DITHER WAVES"></h1>
+</div>
+
+<!-- Controls -->
+<details class="controls">
+  <summary>Controls</summary>
+  <div class="ctrl-grid">
+    <div class="ctrl-row">
+      <label>Wave Speed</label>
+      <input type="range" id="waveSpeed" min="0" max="0.2" step="0.001" value="0.05">
+      <span id="waveSpeedVal">0.05</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Frequency</label>
+      <input type="range" id="waveFrequency" min="1" max="8" step="0.1" value="3">
+      <span id="waveFrequencyVal">3.0</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Amplitude</label>
+      <input type="range" id="waveAmplitude" min="0.1" max="1" step="0.01" value="0.3">
+      <span id="waveAmplitudeVal">0.30</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Colors</label>
+      <input type="range" id="colorNum" min="2" max="8" step="1" value="4">
+      <span id="colorNumVal">4</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Pixel Size</label>
+      <input type="range" id="pixelSize" min="1" max="8" step="0.5" value="2">
+      <span id="pixelSizeVal">2.0</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Mouse Radius</label>
+      <input type="range" id="mouseRadius" min="0.05" max="1.5" step="0.01" value="0.3">
+      <span id="mouseRadiusVal">0.30</span>
+    </div>
+  </div>
+</details>
+
+<script>
+// ═══════════════════════════════════════════════
+//  ANIMATED HERO TITLE — letter-by-letter GSAP
+// ═══════════════════════════════════════════════
+const TITLE = 'DITHER WAVES';
+const titleEl = document.getElementById('heroTitle');
+TITLE.split('').forEach(char => {
+  const wrap  = document.createElement('span');
+  const inner = document.createElement('span');
+  wrap.className  = 'char-wrap';
+  inner.className = 'char-inner';
+  inner.textContent = char;
+  // Hover: slide left → jump right → slide back + neon glow
+  inner.addEventListener('mouseenter', () => {
+    if (inner._tweening) return;
+    inner._tweening = true;
+    const dur = 280, dur2 = 380;
+    // step 1: slide left + glow
+    inner.style.transition = `transform ${dur}ms cubic-bezier(.4,0,1,1), text-shadow ${dur}ms, color ${dur}ms`;
+    inner.style.transform = 'translateX(-130%)';
+    inner.style.textShadow = '0 0 24px #a855f7, 0 0 48px #a855f7, 0 0 80px #7c3aed';
+    inner.style.color = '#c084fc';
+    setTimeout(() => {
+      // step 2: jump to right instantly
+      inner.style.transition = 'none';
+      inner.style.transform = 'translateX(130%)';
+      setTimeout(() => {
+        // step 3: slide back
+        inner.style.transition = `transform ${dur2}ms cubic-bezier(0,0,.6,1), text-shadow 450ms, color 450ms`;
+        inner.style.transform = 'translateX(0)';
+        inner.style.textShadow = 'none';
+        inner.style.color = '#fff';
+        setTimeout(() => { inner._tweening = false; }, dur2 + 50);
+      }, 16);
+    }, dur);
+  });
+  wrap.appendChild(inner);
+  titleEl.appendChild(wrap);
+});
+titleEl.style.pointerEvents = 'auto';
+
+// ═══════════════════════════════════════════════
+//  CONFIG  (exact values from your landing page)
+// ═══════════════════════════════════════════════
+const CFG = {
+  waveSpeed:             0.05,
+  waveFrequency:         3.0,
+  waveAmplitude:         0.3,
+  waveColor:             [0.659, 0.333, 0.969],  // purple
+  colorNum:              4.0,
+  pixelSize:             2.0,
+  enableMouseInteraction: true,
+  mouseRadius:           0.3,
+};
+
+// ═══════════════════════════════════════════════
+//  GLSL SHADERS  (WebGL 2.0 / GLSL ES 3.00)
+// ═══════════════════════════════════════════════
+const VERT = `#version 300 es
+in vec2 a_position;
+out vec2 vUv;
+void main() {
+  vUv = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}`;
+
+const WAVE_FRAG = `#version 300 es
+precision highp float;
+
+uniform vec2  resolution;
+uniform float time;
+uniform float waveSpeed;
+uniform float waveFrequency;
+uniform float waveAmplitude;
+uniform vec3  waveColor;
+uniform vec2  mousePos;
+uniform int   enableMouseInteraction;
+uniform float mouseRadius;
+
+out vec4 fragColor;
+
+vec4 mod289v(vec4 x) { return x - floor(x*(1.0/289.0))*289.0; }
+vec4 permute(vec4 x) { return mod289v(((x*34.0)+1.0)*x); }
+vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159-0.85373472095314*r; }
+vec2 fade(vec2 t) { return t*t*t*(t*(t*6.0-15.0)+10.0); }
+
+float cnoise(vec2 P) {
+  vec4 Pi = floor(P.xyxy)+vec4(0.0,0.0,1.0,1.0);
+  vec4 Pf = fract(P.xyxy)-vec4(0.0,0.0,1.0,1.0);
+  Pi = mod289v(Pi);
+  vec4 ix=Pi.xzxz, iy=Pi.yyww, fx=Pf.xzxz, fy=Pf.yyww;
+  vec4 ii = permute(permute(ix)+iy);
+  vec4 gx = fract(ii*(1.0/41.0))*2.0-1.0;
+  vec4 gy = abs(gx)-0.5;
+  vec4 tx = floor(gx+0.5);
+  gx -= tx;
+  vec2 g00=vec2(gx.x,gy.x), g10=vec2(gx.y,gy.y);
+  vec2 g01=vec2(gx.z,gy.z), g11=vec2(gx.w,gy.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(g00,g00),dot(g01,g01),dot(g10,g10),dot(g11,g11)));
+  g00*=norm.x; g01*=norm.y; g10*=norm.z; g11*=norm.w;
+  float n00=dot(g00,vec2(fx.x,fy.x));
+  float n10=dot(g10,vec2(fx.y,fy.y));
+  float n01=dot(g01,vec2(fx.z,fy.z));
+  float n11=dot(g11,vec2(fx.w,fy.w));
+  vec2 fade_xy=fade(Pf.xy);
+  vec2 n_x=mix(vec2(n00,n01),vec2(n10,n11),fade_xy.x);
+  return 2.3*mix(n_x.x,n_x.y,fade_xy.y);
+}
+
+float fbm(vec2 p) {
+  float value=0.0, amp=1.0, freq=waveFrequency;
+  for(int i=0;i<4;i++){
+    value += amp*abs(cnoise(p));
+    p     *= freq;
+    amp   *= waveAmplitude;
+  }
+  return value;
+}
+
+float pattern(vec2 p) {
+  vec2 p2 = p - time*waveSpeed;
+  return fbm(p + fbm(p2));
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / resolution.xy;
+  uv -= 0.5;
+  uv.x *= resolution.x / resolution.y;
+
+  float f = pattern(uv);
+
+  if (enableMouseInteraction == 1) {
+    vec2 mNDC = (mousePos/resolution - 0.5) * vec2(1.0,-1.0);
+    mNDC.x *= resolution.x/resolution.y;
+    float dist   = length(uv - mNDC);
+    float effect = 1.0 - smoothstep(0.0, mouseRadius, dist);
+    f -= 0.5 * effect;
+  }
+
+  vec3 col = mix(vec3(0.0), waveColor, f);
+  fragColor = vec4(col, 1.0);
+}`;
+
+const DITHER_FRAG = `#version 300 es
+precision highp float;
+
+uniform sampler2D tDiffuse;
+uniform float colorNum;
+uniform float pixelSize;
+uniform vec2  resolution;
+
+in  vec2 vUv;
+out vec4 fragColor;
+
+const float bayer[64] = float[64](
+   0.0/64.0,48.0/64.0,12.0/64.0,60.0/64.0, 3.0/64.0,51.0/64.0,15.0/64.0,63.0/64.0,
+  32.0/64.0,16.0/64.0,44.0/64.0,28.0/64.0,35.0/64.0,19.0/64.0,47.0/64.0,31.0/64.0,
+   8.0/64.0,56.0/64.0, 4.0/64.0,52.0/64.0,11.0/64.0,59.0/64.0, 7.0/64.0,55.0/64.0,
+  40.0/64.0,24.0/64.0,36.0/64.0,20.0/64.0,43.0/64.0,27.0/64.0,39.0/64.0,23.0/64.0,
+   2.0/64.0,50.0/64.0,14.0/64.0,62.0/64.0, 1.0/64.0,49.0/64.0,13.0/64.0,61.0/64.0,
+  34.0/64.0,18.0/64.0,46.0/64.0,30.0/64.0,33.0/64.0,17.0/64.0,45.0/64.0,29.0/64.0,
+  10.0/64.0,58.0/64.0, 6.0/64.0,54.0/64.0, 9.0/64.0,57.0/64.0, 5.0/64.0,53.0/64.0,
+  42.0/64.0,26.0/64.0,38.0/64.0,22.0/64.0,41.0/64.0,25.0/64.0,37.0/64.0,21.0/64.0
+);
+
+vec3 dither(vec2 uv, vec3 color) {
+  vec2  sc  = floor(uv * resolution / pixelSize);
+  int   x   = int(mod(sc.x, 8.0));
+  int   y   = int(mod(sc.y, 8.0));
+  float thr = bayer[y*8+x] - 0.25;
+  float stp = 1.0 / (colorNum - 1.0);
+  color += thr * stp;
+  color  = clamp(color - 0.2, 0.0, 1.0);
+  return floor(color*(colorNum-1.0)+0.5)/(colorNum-1.0);
+}
+
+void main() {
+  vec2 nps    = pixelSize / resolution;
+  vec2 uvPx   = nps * floor(vUv / nps);
+  vec4 color  = texture(tDiffuse, uvPx);
+  color.rgb   = dither(vUv, color.rgb);
+  fragColor   = color;
+}`;
+
+// ═══════════════════════════════════════════════
+//  WEBGL SETUP
+// ═══════════════════════════════════════════════
+const canvas = document.getElementById('glCanvas');
+const gl = canvas.getContext('webgl2');
+if (!gl) { alert('WebGL 2 not available. Please use a modern browser.'); }
+
+function mkShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+function mkProgram(vert, frag) {
+  const p = gl.createProgram();
+  gl.attachShader(p, mkShader(gl.VERTEX_SHADER,   vert));
+  gl.attachShader(p, mkShader(gl.FRAGMENT_SHADER, frag));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS))
+    console.error(gl.getProgramInfoLog(p));
+  return p;
+}
+
+const waveProg   = mkProgram(VERT, WAVE_FRAG);
+const ditherProg = mkProgram(VERT, DITHER_FRAG);
+
+// Full-screen triangle
+const posBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+
+function bindPos(prog) {
+  const loc = gl.getAttribLocation(prog, 'a_position');
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+}
+
+// Uniform helpers
+const uLoc = (p, n) => gl.getUniformLocation(p, n);
+
+// Wave uniform locations
+const WU = {
+  resolution:             uLoc(waveProg,'resolution'),
+  time:                   uLoc(waveProg,'time'),
+  waveSpeed:              uLoc(waveProg,'waveSpeed'),
+  waveFrequency:          uLoc(waveProg,'waveFrequency'),
+  waveAmplitude:          uLoc(waveProg,'waveAmplitude'),
+  waveColor:              uLoc(waveProg,'waveColor'),
+  mousePos:               uLoc(waveProg,'mousePos'),
+  enableMouseInteraction: uLoc(waveProg,'enableMouseInteraction'),
+  mouseRadius:            uLoc(waveProg,'mouseRadius'),
+};
+// Dither uniform locations
+const DU = {
+  tDiffuse:   uLoc(ditherProg,'tDiffuse'),
+  colorNum:   uLoc(ditherProg,'colorNum'),
+  pixelSize:  uLoc(ditherProg,'pixelSize'),
+  resolution: uLoc(ditherProg,'resolution'),
+};
+
+// ═══════════════════════════════════════════════
+//  FRAMEBUFFER  for two-pass rendering
+// ═══════════════════════════════════════════════
+let fb, fbTex;
+
+function setupFramebuffer(w, h) {
+  if (fb)    gl.deleteFramebuffer(fb);
+  if (fbTex) gl.deleteTexture(fbTex);
+
+  fbTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, fbTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fbTex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+// ═══════════════════════════════════════════════
+//  RESIZE
+// ═══════════════════════════════════════════════
+let W = 0, H = 0;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = Math.floor(window.innerWidth  * dpr);
+  H = Math.floor(window.innerHeight * dpr);
+  canvas.width  = W;
+  canvas.height = H;
+  setupFramebuffer(W, H);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ═══════════════════════════════════════════════
+//  MOUSE TRACKING
+// ═══════════════════════════════════════════════
+let mouseX = W / 2, mouseY = H / 2;
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const dpr  = window.devicePixelRatio || 1;
+  mouseX = (e.clientX - rect.left) * dpr;
+  mouseY = (e.clientY - rect.top)  * dpr;
+});
+
+// ═══════════════════════════════════════════════
+//  RENDER LOOP
+// ═══════════════════════════════════════════════
+function render(ts) {
+  requestAnimationFrame(render);
+  const time = ts * 0.001;
+
+  // ── PASS 1: Wave → framebuffer ──
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(waveProg);
+  bindPos(waveProg);
+
+  gl.uniform2f(WU.resolution, W, H);
+  gl.uniform1f(WU.time,             time);
+  gl.uniform1f(WU.waveSpeed,        CFG.waveSpeed);
+  gl.uniform1f(WU.waveFrequency,    CFG.waveFrequency);
+  gl.uniform1f(WU.waveAmplitude,    CFG.waveAmplitude);
+  gl.uniform3fv(WU.waveColor,       CFG.waveColor);
+  gl.uniform2f(WU.mousePos,         mouseX, mouseY);
+  gl.uniform1i(WU.enableMouseInteraction, CFG.enableMouseInteraction ? 1 : 0);
+  gl.uniform1f(WU.mouseRadius,      CFG.mouseRadius);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // ── PASS 2: Dither → screen ──
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(ditherProg);
+  bindPos(ditherProg);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, fbTex);
+  gl.uniform1i(DU.tDiffuse,  0);
+  gl.uniform1f(DU.colorNum,  CFG.colorNum);
+  gl.uniform1f(DU.pixelSize, CFG.pixelSize);
+  gl.uniform2f(DU.resolution, W, H);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+requestAnimationFrame(render);
+
+// ═══════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════
+function bindControl(id, key, decimals) {
+  const input = document.getElementById(id);
+  const label = document.getElementById(id + 'Val');
+  input.addEventListener('input', () => {
+    const v = parseFloat(input.value);
+    CFG[key] = v;
+    if (label) label.textContent = v.toFixed(decimals);
+  });
+}
+bindControl('waveSpeed',     'waveSpeed',    3);
+bindControl('waveFrequency', 'waveFrequency',1);
+bindControl('waveAmplitude', 'waveAmplitude',2);
+bindControl('colorNum',      'colorNum',     0);
+bindControl('pixelSize',     'pixelSize',    1);
+bindControl('mouseRadius',   'mouseRadius',  2);
+</script>
+</body>
+</html>
