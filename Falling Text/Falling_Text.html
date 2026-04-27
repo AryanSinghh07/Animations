@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Falling Text</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Bebas+Neue&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      font-family: 'Inter', sans-serif;
+      background: #080810;
+      color: #fff;
+      overflow-x: hidden;
+    }
+
+    /* ── Page layout ── */
+    .page {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 60px 32px 80px;
+      display: flex;
+      flex-direction: column;
+      gap: 64px;
+    }
+
+    /* ── Section headers ── */
+    .section-label {
+      font-size: 0.65rem;
+      font-weight: 500;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(168,85,247,0.7);
+      margin-bottom: 12px;
+    }
+
+    /* ── Falling Text wrapper ── */
+    .falling-text-container {
+      position: relative;
+      width: 100%;
+      cursor: pointer;
+      text-align: center;
+      padding-top: 32px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.02);
+    }
+
+    /* The text div — words live here */
+    .falling-text-words {
+      display: inline-block;
+      line-height: 1.4;
+      pointer-events: none;
+    }
+
+    /* Matter.js canvas sits behind text */
+    .falling-text-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Word spans */
+    .word-span {
+      display: inline-block;
+      margin: 0 3px;
+      user-select: none;
+      position: relative;
+      z-index: 1;
+      white-space: nowrap;
+    }
+    .word-span.highlight {
+      color: #a78bfa;
+      font-weight: 700;
+    }
+
+    /* ── Trigger pill button ── */
+    .trigger-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+      margin-bottom: 12px;
+      padding: 6px 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 9999px;
+    }
+    .trigger-hint svg { opacity: .5; }
+
+    /* ── Reset button ── */
+    .reset-btn {
+      margin-top: 16px;
+      margin-bottom: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 9999px;
+      padding: 6px 16px;
+      cursor: pointer;
+      transition: background .2s, color .2s;
+    }
+    .reset-btn:hover { background: rgba(168,85,247,0.15); color: #c084fc; border-color: rgba(168,85,247,0.3); }
+
+  </style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ── Demo 1: Large headline ── -->
+  <div>
+    <p class="section-label">Demo — Click anywhere in the box</p>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <span class="trigger-hint">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M6 4v2.5L7.5 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        <span id="triggerHintText">click to activate</span>
+      </span>
+      <button class="reset-btn" id="resetBtn">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M9 5A4 4 0 1 1 7.5 1.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <path d="M6.5 1 8 1.8l-.8 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Reset
+      </button>
+    </div>
+
+    <!-- The falling text container -->
+    <div id="fallingContainer" class="falling-text-container" style="height: 320px;">
+      <div id="fallingWords" class="falling-text-words" style="font-size: 1.8rem;"></div>
+      <div id="fallingCanvas" class="falling-text-canvas"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  FallingText — vanilla JS port of React component
+// ═══════════════════════════════════════════════════
+
+// Default config
+const CONFIG = {
+  text:                    'Every word falls and bounces — drag them with your mouse to interact with the physics simulation!',
+  highlightWords:          ['falls', 'bounces', 'drag', 'physics'],
+  trigger:                 'click',
+  backgroundColor:         'transparent',
+  wireframes:              false,
+  gravity:                 1,
+  mouseConstraintStiffness: 0.2,
+  fontSize:                '1.8rem',
+};
+
+// DOM refs
+const containerEl = document.getElementById('fallingContainer');
+const wordsEl     = document.getElementById('fallingWords');
+const canvasEl    = document.getElementById('fallingCanvas');
+
+let effectStarted  = false;
+let matterCleanup  = null;
+let rafId          = null;
+let scrollObserver = null;
+
+// ─────────────────────────────────────────────────
+//  Step 1 — Render word spans into DOM
+// ─────────────────────────────────────────────────
+function buildWords() {
+  const words = CONFIG.text.split(' ');
+  wordsEl.innerHTML = words.map(word => {
+    const isHighlighted = CONFIG.highlightWords.some(hw => word.startsWith(hw));
+    return `<span class="word-span${isHighlighted ? ' highlight' : ''}">${word}</span>`;
+  }).join(' ');
+  wordsEl.style.fontSize = CONFIG.fontSize;
+}
+
+// ─────────────────────────────────────────────────
+//  Step 2 — Start Matter.js physics
+// ─────────────────────────────────────────────────
+function startPhysics() {
+  if (effectStarted) return;
+  effectStarted = true;
+
+  const { Engine, Render, Runner, World, Bodies, Mouse, MouseConstraint, Body, Events } = Matter;
+
+  const rect   = containerEl.getBoundingClientRect();
+  const width  = containerEl.offsetWidth;
+  const height = containerEl.offsetHeight;
+
+  if (width <= 0 || height <= 0) return;
+
+  // Engine
+  const engine = Engine.create();
+  engine.gravity.y = CONFIG.gravity;
+
+  // Renderer (transparent canvas for mouse events)
+  const render = Render.create({
+    element: canvasEl,
+    engine,
+    options: {
+      width,
+      height,
+      background:  CONFIG.backgroundColor,
+      wireframes:  CONFIG.wireframes,
+    }
+  });
+
+  // Boundaries — exact same as React source
+  const bOpts = { isStatic: true, render: { fillStyle: 'transparent', strokeStyle: 'rgba(168,85,247,0.4)' } };
+  const floor    = Bodies.rectangle(width / 2, height + 25, width, 50, bOpts);
+  const leftWall = Bodies.rectangle(-25,        height / 2,  50, height, bOpts);
+  const rightWall= Bodies.rectangle(width + 25, height / 2,  50, height, bOpts);
+  const ceiling  = Bodies.rectangle(width / 2, -25,          width, 50, bOpts);
+
+  // Word bodies
+  const containerRect = containerEl.getBoundingClientRect();
+  const wordSpans = wordsEl.querySelectorAll('.word-span');
+
+  const wordBodies = [...wordSpans].map(elem => {
+    const r = elem.getBoundingClientRect();
+    const x = r.left - containerRect.left + r.width  / 2;
+    const y = r.top  - containerRect.top  + r.height / 2;
+
+    const body = Bodies.rectangle(x, y, r.width, r.height, {
+      render:      { fillStyle: 'transparent', strokeStyle: 'rgba(168,85,247,0.5)' },
+      restitution: 0.8,
+      frictionAir: 0.01,
+      friction:    0.2,
+    });
+
+    Body.setVelocity(body,        { x: (Math.random() - 0.5) * 5, y: 0 });
+    Body.setAngularVelocity(body,   (Math.random() - 0.5) * 0.05);
+
+    // Switch span to absolute — positioned by physics from now on
+    elem.style.position  = 'absolute';
+    elem.style.left      = `${x}px`;
+    elem.style.top       = `${y}px`;
+    elem.style.transform = 'translate(-50%, -50%)';
+
+    return { elem, body };
+  });
+
+  // Mouse constraint
+  const mouse = Mouse.create(containerEl);
+  const mc    = MouseConstraint.create(engine, {
+    mouse,
+    constraint: { stiffness: CONFIG.mouseConstraintStiffness, render: { visible: false } }
+  });
+  render.mouse = mouse;
+
+  World.add(engine.world, [floor, leftWall, rightWall, ceiling, mc, ...wordBodies.map(wb => wb.body)]);
+
+  const runner = Runner.create();
+  Runner.run(runner, engine);
+  Render.run(render);
+
+  // Sync DOM to physics positions
+  function updateLoop() {
+    wordBodies.forEach(({ body, elem }) => {
+      const { x, y } = body.position;
+      elem.style.left      = `${x}px`;
+      elem.style.top       = `${y}px`;
+      elem.style.transform = `translate(-50%, -50%) rotate(${body.angle}rad)`;
+    });
+    rafId = requestAnimationFrame(updateLoop);
+  }
+  rafId = requestAnimationFrame(updateLoop);
+
+  // Cleanup function (used by reset)
+  matterCleanup = () => {
+    cancelAnimationFrame(rafId);
+    Render.stop(render);
+    Runner.stop(runner);
+    if (render.canvas && canvasEl.contains(render.canvas)) canvasEl.removeChild(render.canvas);
+    World.clear(engine.world, false);
+    Engine.clear(engine);
+    matterCleanup = null;
+    effectStarted = false;
+  };
+}
+
+// ─────────────────────────────────────────────────
+//  Trigger setup
+// ─────────────────────────────────────────────────
+function setupTrigger() {
+  // Remove old listeners / observers
+  containerEl.onclick      = null;
+  containerEl.onmouseenter = null;
+  if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
+
+  switch (CONFIG.trigger) {
+    case 'auto':
+      startPhysics();
+      break;
+    case 'click':
+      containerEl.onclick = () => startPhysics();
+      break;
+    case 'hover':
+      containerEl.onmouseenter = () => startPhysics();
+      break;
+    case 'scroll':
+      scrollObserver = new IntersectionObserver(([e]) => {
+        if (e.isIntersecting) { startPhysics(); scrollObserver.disconnect(); }
+      }, { threshold: 0.1 });
+      scrollObserver.observe(containerEl);
+      break;
+  }
+}
+
+// ─────────────────────────────────────────────────
+//  Reset
+// ─────────────────────────────────────────────────
+function reset() {
+  if (matterCleanup) matterCleanup();
+  buildWords();
+  setupTrigger();
+}
+
+// ─────────────────────────────────────────────────
+//  Init
+// ─────────────────────────────────────────────────
+buildWords();
+setupTrigger();
+
+document.getElementById('resetBtn').addEventListener('click', reset);
+</script>
+</body>
+</html>
