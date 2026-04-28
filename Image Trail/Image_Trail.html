@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Trail</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..600&family=Bebas+Neue&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #080810;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* ── Full-screen trail area ── */
+    #trail {
+      position: absolute; inset: 0;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    /* ── ImageTrail.css ── */
+    .content__img {
+      position: absolute;
+      width: 220px;
+      height: 155px;
+      opacity: 0;
+      pointer-events: none;
+      overflow: hidden;
+      will-change: transform;
+      border-radius: 6px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .content__img-inner {
+      width: 100%; height: 100%;
+      background-size: cover;
+      background-position: center;
+      will-change: transform, filter;
+    }
+
+    /* ── Centered hero text (pointer-events: none so it doesn't block trail) ── */
+    .hero {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      pointer-events: none; z-index: 10;
+      text-align: center; gap: 12px;
+    }
+    .hero-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(3rem, 10vw, 9rem);
+      line-height: 0.9;
+      letter-spacing: 0.02em;
+      color: rgba(255,255,255,0.08);
+      user-select: none;
+    }
+    .hero-sub {
+      font-size: 0.72rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.18);
+    }
+
+    /* ── Variant buttons ── */
+    .controls {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; gap: 8px; z-index: 20;
+    }
+    .var-btn {
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 50%;
+      color: rgba(255,255,255,0.35);
+      font-size: 0.72rem;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: background .2s, color .2s, border-color .2s, box-shadow .2s;
+    }
+    .var-btn:hover  { background: rgba(168,85,247,0.2); color: #c084fc; border-color: rgba(168,85,247,0.4); }
+    .var-btn.active { background: rgba(168,85,247,0.3); color: #e9d5ff; border-color: rgba(168,85,247,0.7); box-shadow: 0 0 16px rgba(168,85,247,0.35); }
+
+    /* variant label */
+    .var-label {
+      position: fixed; top: 24px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.62rem; letter-spacing: 0.2em; text-transform: uppercase;
+      color: rgba(168,85,247,0.55); z-index: 20; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Trail container — images injected by JS -->
+<div id="trail"></div>
+
+<!-- Hero text behind trail -->
+<div class="hero">
+  <h1 class="hero-title">MOVE YOUR<br>MOUSE</h1>
+  <p class="hero-sub">Image trail · hover to activate</p>
+</div>
+
+<!-- Variant selector -->
+<p class="var-label" id="varLabel">Variant 1 — fade &amp; shrink</p>
+<div class="controls" id="controls"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  IMAGES  (15 photos from Picsum)
+// ═══════════════════════════════════════════════════
+const IMAGES = [
+  'https://picsum.photos/seed/trail1/440/310',
+  'https://picsum.photos/seed/trail2/440/310',
+  'https://picsum.photos/seed/trail3/440/310',
+  'https://picsum.photos/seed/trail4/440/310',
+  'https://picsum.photos/seed/trail5/440/310',
+  'https://picsum.photos/seed/trail6/440/310',
+  'https://picsum.photos/seed/trail7/440/310',
+  'https://picsum.photos/seed/trail8/440/310',
+  'https://picsum.photos/seed/trail9/440/310',
+  'https://picsum.photos/seed/trail10/440/310',
+  'https://picsum.photos/seed/trail11/440/310',
+  'https://picsum.photos/seed/trail12/440/310',
+  'https://picsum.photos/seed/trail13/440/310',
+  'https://picsum.photos/seed/trail14/440/310',
+  'https://picsum.photos/seed/trail15/440/310',
+];
+
+const VARIANT_LABELS = {
+  1: 'Variant 1 — fade & shrink',
+  2: 'Variant 2 — zoom & brighten',
+  3: 'Variant 3 — scale & fly up',
+  4: 'Variant 4 — motion streak',
+  5: 'Variant 5 — rotation trail',
+  6: 'Variant 6 — speed-mapped filters',
+  7: 'Variant 7 — stacked pile',
+  8: 'Variant 8 — 3D depth',
+};
+
+// ═══════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════
+function lerp(a, b, n) { return (1 - n) * a + n * b; }
+
+function getLocalPointerPos(e, rect) {
+  let clientX = 0, clientY = 0;
+  if (e.touches && e.touches.length > 0) {
+    clientX = e.touches[0].clientX; clientY = e.touches[0].clientY;
+  } else {
+    clientX = e.clientX; clientY = e.clientY;
+  }
+  return { x: clientX - rect.left, y: clientY - rect.top };
+}
+
+function getMouseDistance(p1, p2) {
+  return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+}
+
+function getNewPosition(position, offset, arr) {
+  const realOffset = Math.abs(offset) % arr.length;
+  return position - realOffset >= 0
+    ? position - realOffset
+    : arr.length - (realOffset - position);
+}
+
+// ═══════════════════════════════════════════════════
+//  ImageItem  (exact port from React source)
+// ═══════════════════════════════════════════════════
+class ImageItem {
+  constructor(DOM_el) {
+    this.DOM = { el: DOM_el, inner: DOM_el.querySelector('.content__img-inner') };
+    this.defaultStyle = { scale: 1, x: 0, y: 0, opacity: 0 };
+    this.rect = null;
+    this.getRect();
+    this.initEvents();
+  }
+  initEvents() {
+    this.resize = () => { gsap.set(this.DOM.el, this.defaultStyle); this.getRect(); };
+    window.addEventListener('resize', this.resize);
+  }
+  destroy() { window.removeEventListener('resize', this.resize); }
+  getRect() { this.rect = this.DOM.el.getBoundingClientRect(); }
+}
+
+// ═══════════════════════════════════════════════════
+//  VARIANT 1  — fade in → slide to cursor → fade+shrink out
+// ═══════════════════════════════════════════════════
+class ImageTrailVariant1 {
+  constructor(container) {
+    this._init(container);
+  }
+  _init(container) {
+    this.container = container;
+    this.images = [...container.querySelectorAll('.content__img')].map(el => new ImageItem(el));
+    this.imagesTotal = this.images.length;
+    this.imgPosition = 0; this.zIndexVal = 1;
+    this.activeImagesCount = 0; this.isIdle = true; this.threshold = 80;
+    this.mousePos = {x:0,y:0}; this.lastMousePos = {x:0,y:0}; this.cacheMousePos = {x:0,y:0};
+
+    const handleMove = ev => { const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r); };
+    container.addEventListener('mousemove', handleMove);
+    container.addEventListener('touchmove', handleMove);
+
+    const initRender = ev => {
+      const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r);
+      this.cacheMousePos = {...this.mousePos};
+      requestAnimationFrame(() => this.render());
+      container.removeEventListener('mousemove', initRender);
+      container.removeEventListener('touchmove', initRender);
+    };
+    container.addEventListener('mousemove', initRender);
+    container.addEventListener('touchmove', initRender);
+  }
+  render() {
+    const d = getMouseDistance(this.mousePos, this.lastMousePos);
+    this.cacheMousePos.x = lerp(this.cacheMousePos.x, this.mousePos.x, 0.1);
+    this.cacheMousePos.y = lerp(this.cacheMousePos.y, this.mousePos.y, 0.1);
+    if (d > this.threshold) { this.showNextImage(); this.lastMousePos = {...this.mousePos}; }
+    if (this.isIdle && this.zIndexVal !== 1) this.zIndexVal = 1;
+    this._raf = requestAnimationFrame(() => this.render());
+  }
+  showNextImage() {
+    ++this.zIndexVal;
+    this.imgPosition = this.imgPosition < this.imagesTotal - 1 ? this.imgPosition + 1 : 0;
+    const img = this.images[this.imgPosition];
+    gsap.killTweensOf(img.DOM.el);
+    gsap.timeline({ onStart:()=>this.onImageActivated(), onComplete:()=>this.onImageDeactivated() })
+      .fromTo(img.DOM.el,
+        { opacity:1, scale:1, zIndex:this.zIndexVal, x: this.cacheMousePos.x - img.rect.width/2, y: this.cacheMousePos.y - img.rect.height/2 },
+        { duration:0.4, ease:'power1', x: this.mousePos.x - img.rect.width/2, y: this.mousePos.y - img.rect.height/2 }, 0)
+      .to(img.DOM.el, { duration:0.4, ease:'power3', opacity:0, scale:0.2 }, 0.4);
+  }
+  onImageActivated()   { this.activeImagesCount++; this.isIdle = false; }
+  onImageDeactivated() { this.activeImagesCount--; if (!this.activeImagesCount) this.isIdle = true; }
+}
+
+// ═══════════════════════════════════════════════════
+//  VARIANT 2  — scale 0→1 + inner zoom + brighten
+// ═══════════════════════════════════════════════════
+class ImageTrailVariant2 {
+  constructor(container) { this._setup(container); }
+  _setup(container) {
+    this.container = container;
+    this.images = [...container.querySelectorAll('.content__img')].map(el => new ImageItem(el));
+    this.imagesTotal = this.images.length;
+    this.imgPosition = 0; this.zIndexVal = 1;
+    this.activeImagesCount = 0; this.isIdle = true; this.threshold = 80;
+    this.mousePos = {x:0,y:0}; this.lastMousePos = {x:0,y:0}; this.cacheMousePos = {x:0,y:0};
+    const move = ev => { const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r); };
+    container.addEventListener('mousemove', move); container.addEventListener('touchmove', move);
+    const init = ev => {
+      const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r);
+      this.cacheMousePos = {...this.mousePos};
+      requestAnimationFrame(() => this.render());
+      container.removeEventListener('mousemove', init); container.removeEventListener('touchmove', init);
+    };
+    container.addEventListener('mousemove', init); container.addEventListener('touchmove', init);
+  }
+  render() {
+    const d = getMouseDistance(this.mousePos, this.lastMousePos);
+    this.cacheMousePos.x = lerp(this.cacheMousePos.x, this.mousePos.x, 0.1);
+    this.cacheMousePos.y = lerp(this.cacheMousePos.y, this.mousePos.y, 0.1);
+    if (d > this.threshold) { this.showNextImage(); this.lastMousePos = {...this.mousePos}; }
+    if (this.isIdle && this.zIndexVal !== 1) this.zIndexVal = 1;
+    requestAnimationFrame(() => this.render());
+  }
+  showNextImage() {
+    ++this.zIndexVal;
+    this.imgPosition = this.imgPosition < this.imagesTotal - 1 ? this.imgPosition + 1 : 0;
+    const img = this.images[this.imgPosition];
+    gsap.killTweensOf(img.DOM.el);
+    gsap.timeline({ onStart:()=>this.onImageActivated(), onComplete:()=>this.onImageDeactivated() })
+      .fromTo(img.DOM.el,
+        { opacity:1, scale:0, zIndex:this.zIndexVal, x: this.cacheMousePos.x - img.rect.width/2, y: this.cacheMousePos.y - img.rect.height/2 },
+        { duration:0.4, ease:'power1', scale:1, x: this.mousePos.x - img.rect.width/2, y: this.mousePos.y - img.rect.height/2 }, 0)
+      .fromTo(img.DOM.inner,
+        { scale:2.8, filter:'brightness(250%)' },
+        { duration:0.4, ease:'power1', scale:1, filter:'brightness(100%)' }, 0)
+      .to(img.DOM.el, { duration:0.4, ease:'power2', opacity:0, scale:0.2 }, 0.45);
+  }
+  onImageActivated()   { this.activeImagesCount++; this.isIdle = false; }
+  onImageDeactivated() { this.activeImagesCount--; if (!this.activeImagesCount) this.isIdle = true; }
+}
+
+// ═══════════════════════════════════════════════════
+//  VARIANT 3  — fly upward on exit
+// ═══════════════════════════════════════════════════
+class ImageTrailVariant3 {
+  constructor(container) { this._setup(container); }
+  _setup(container) {
+    this.container = container;
+    this.images = [...container.querySelectorAll('.content__img')].map(el => new ImageItem(el));
+    this.imagesTotal = this.images.length;
+    this.imgPosition = 0; this.zIndexVal = 1;
+    this.activeImagesCount = 0; this.isIdle = true; this.threshold = 80;
+    this.mousePos = {x:0,y:0}; this.lastMousePos = {x:0,y:0}; this.cacheMousePos = {x:0,y:0};
+    const move = ev => { const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r); };
+    container.addEventListener('mousemove', move); container.addEventListener('touchmove', move);
+    const init = ev => {
+      const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r);
+      this.cacheMousePos = {...this.mousePos};
+      requestAnimationFrame(() => this.render());
+      container.removeEventListener('mousemove', init); container.removeEventListener('touchmove', init);
+    };
+    container.addEventListener('mousemove', init); container.addEventListener('touchmove', init);
+  }
+  render() {
+    const d = getMouseDistance(this.mousePos, this.lastMousePos);
+    this.cacheMousePos.x = lerp(this.cacheMousePos.x, this.mousePos.x, 0.1);
+    this.cacheMousePos.y = lerp(this.cacheMousePos.y, this.mousePos.y, 0.1);
+    if (d > this.threshold) { this.showNextImage(); this.lastMousePos = {...this.mousePos}; }
+    if (this.isIdle && this.zIndexVal !== 1) this.zIndexVal = 1;
+    requestAnimationFrame(() => this.render());
+  }
+  showNextImage() {
+    ++this.zIndexVal;
+    this.imgPosition = this.imgPosition < this.imagesTotal - 1 ? this.imgPosition + 1 : 0;
+    const img = this.images[this.imgPosition];
+    gsap.killTweensOf(img.DOM.el);
+    gsap.timeline({ onStart:()=>this.onImageActivated(), onComplete:()=>this.onImageDeactivated() })
+      .fromTo(img.DOM.el,
+        { opacity:1, scale:0, zIndex:this.zIndexVal, xPercent:0, yPercent:0, x: this.cacheMousePos.x - img.rect.width/2, y: this.cacheMousePos.y - img.rect.height/2 },
+        { duration:0.4, ease:'power1', scale:1, x: this.mousePos.x - img.rect.width/2, y: this.mousePos.y - img.rect.height/2 }, 0)
+      .fromTo(img.DOM.inner, { scale:1.2 }, { duration:0.4, ease:'power1', scale:1 }, 0)
+      .to(img.DOM.el, { duration:0.6, ease:'power2', opacity:0, scale:0.2, xPercent:()=>gsap.utils.random(-30,30), yPercent:-200 }, 0.6);
+  }
+  onImageActivated()   { this.activeImagesCount++; this.isIdle = false; }
+  onImageDeactivated() { this.activeImagesCount--; if (!this.activeImagesCount) this.isIdle = true; }
+}
+
+// ═══════════════════════════════════════════════════
+//  VARIANT 4  — motion streak / directional drift
+// ═══════════════════════════════════════════════════
+class ImageTrailVariant4 {
+  constructor(container) { this._setup(container); }
+  _setup(container) {
+    this.container = container;
+    this.images = [...container.querySelectorAll('.content__img')].map(el => new ImageItem(el));
+    this.imagesTotal = this.images.length;
+    this.imgPosition = 0; this.zIndexVal = 1;
+    this.activeImagesCount = 0; this.isIdle = true; this.threshold = 80;
+    this.mousePos = {x:0,y:0}; this.lastMousePos = {x:0,y:0}; this.cacheMousePos = {x:0,y:0};
+    const move = ev => { const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r); };
+    container.addEventListener('mousemove', move); container.addEventListener('touchmove', move);
+    const init = ev => {
+      const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r);
+      this.cacheMousePos = {...this.mousePos};
+      requestAnimationFrame(() => this.render());
+      container.removeEventListener('mousemove', init); container.removeEventListener('touchmove', init);
+    };
+    container.addEventListener('mousemove', init); container.addEventListener('touchmove', init);
+  }
+  render() {
+    const d = getMouseDistance(this.mousePos, this.lastMousePos);
+    if (d > this.threshold) { this.showNextImage(); this.lastMousePos = {...this.mousePos}; }
+    this.cacheMousePos.x = lerp(this.cacheMousePos.x, this.mousePos.x, 0.1);
+    this.cacheMousePos.y = lerp(this.cacheMousePos.y, this.mousePos.y, 0.1);
+    if (this.isIdle && this.zIndexVal !== 1) this.zIndexVal = 1;
+    requestAnimationFrame(() => this.render());
+  }
+  showNextImage() {
+    ++this.zIndexVal;
+    this.imgPosition = this.imgPosition < this.imagesTotal - 1 ? this.imgPosition + 1 : 0;
+    const img = this.images[this.imgPosition];
+    gsap.killTweensOf(img.DOM.el);
+    let dx = this.mousePos.x - this.cacheMousePos.x;
+    let dy = this.mousePos.y - this.cacheMousePos.y;
+    let dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist !== 0) { dx /= dist; dy /= dist; }
+    dx *= dist/100; dy *= dist/100;
+    gsap.timeline({ onStart:()=>this.onImageActivated(), onComplete:()=>this.onImageDeactivated() })
+      .fromTo(img.DOM.el,
+        { opacity:1, scale:0, zIndex:this.zIndexVal, x: this.cacheMousePos.x - img.rect.width/2, y: this.cacheMousePos.y - img.rect.height/2 },
+        { duration:0.4, ease:'power1', scale:1, x: this.mousePos.x - img.rect.width/2, y: this.mousePos.y - img.rect.height/2 }, 0)
+      .fromTo(img.DOM.inner,
+        { scale:2, filter:`brightness(${Math.max((400*dist)/100,100)}%) contrast(${Math.max((400*dist)/100,100)}%)` },
+        { duration:0.4, ease:'power1', scale:1, filter:'brightness(100%) contrast(100%)' }, 0)
+      .to(img.DOM.el, { duration:0.4, ease:'power3', opacity:0 }, 0.4)
+      .to(img.DOM.el, { duration:1.5, ease:'power4', x:`+=${dx*110}`, y:`+=${dy*110}` }, 0.05);
+  }
+  onImageActivated()   { this.activeImagesCount++; this.isIdle = false; }
+  onImageDeactivated() { this.activeImagesCount--; if (!this.activeImagesCount) this.isIdle = true; }
+}
+
+// ═══════════════════════════════════════════════════
+//  VARIANT 5  — rotation + direction-aware tilt
+// ═══════════════════════════════════════════════════
+class ImageTrailVariant5 {
+  constructor(container) { this._setup(container); }
+  _setup(container) {
+    this.container = container;
+    this.images = [...container.querySelectorAll('.content__img')].map(el => new ImageItem(el));
+    this.imagesTotal = this.images.length;
+    this.imgPosition = 0; this.zIndexVal = 1;
+    this.activeImagesCount = 0; this.isIdle = true; this.threshold = 80;
+    this.mousePos = {x:0,y:0}; this.lastMousePos = {x:0,y:0}; this.cacheMousePos = {x:0,y:0};
+    this.lastAngle = 0;
+    const move = ev => { const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r); };
+    container.addEventListener('mousemove', move); container.addEventListener('touchmove', move);
+    const init = ev => {
+      const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r);
+      this.cacheMousePos = {...this.mousePos};
+      requestAnimationFrame(() => this.render());
+      container.removeEventListener('mousemove', init); container.removeEventListener('touchmove', init);
+    };
+    container.addEventListener('mousemove', init); container.addEventListener('touchmove', init);
+  }
+  render() {
+    const d = getMouseDistance(this.mousePos, this.lastMousePos);
+    if (d > this.threshold) { this.showNextImage(); this.lastMousePos = {...this.mousePos}; }
+    this.cacheMousePos.x = lerp(this.cacheMousePos.x, this.mousePos.x, 0.1);
+    this.cacheMousePos.y = lerp(this.cacheMousePos.y, this.mousePos.y, 0.1);
+    if (this.isIdle && this.zIndexVal !== 1) this.zIndexVal = 1;
+    requestAnimationFrame(() => this.render());
+  }
+  showNextImage() {
+    let dx = this.mousePos.x - this.cacheMousePos.x;
+    let dy = this.mousePos.y - this.cacheMousePos.y;
+    let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    if (angle < 0) angle += 360;
+    if (angle > 90 && angle <= 270) angle += 180;
+    const clockwise = angle >= this.lastAngle;
+    this.lastAngle = angle;
+    const startAngle = clockwise ? angle - 10 : angle + 10;
+    let dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist !== 0) { dx /= dist; dy /= dist; }
+    dx *= dist/150; dy *= dist/150;
+    ++this.zIndexVal;
+    this.imgPosition = this.imgPosition < this.imagesTotal - 1 ? this.imgPosition + 1 : 0;
+    const img = this.images[this.imgPosition];
+    gsap.killTweensOf(img.DOM.el);
+    gsap.timeline({ onStart:()=>this.onImageActivated(), onComplete:()=>this.onImageDeactivated() })
+      .fromTo(img.DOM.el,
+        { opacity:1, filter:'brightness(80%)', scale:0.1, zIndex:this.zIndexVal, x: this.cacheMousePos.x - img.rect.width/2, y: this.cacheMousePos.y - img.rect.height/2, rotation:startAngle },
+        { duration:1, ease:'power2', scale:1, filter:'brightness(100%)', x: this.mousePos.x - img.rect.width/2 + dx*70, y: this.mousePos.y - img.rect.height/2 + dy*70, rotation:this.lastAngle }, 0)
+      .to(img.DOM.el, { duration:0.4, ease:'expo', opacity:0 }, 0.5)
+      .to(img.DOM.el, { duration:1.5, ease:'power4', x:`+=${dx*120}`, y:`+=${dy*120}` }, 0.05);
+  }
+  onImageActivated()   { this.activeImagesCount++; this.isIdle = false; }
+  onImageDeactivated() { this.activeImagesCount--; if (!this.activeImagesCount) this.isIdle = true; }
+}
+
+// ═══════════════════════════════════════════════════
+//  VARIANT 6  — speed-mapped size, blur, grayscale
+// ═══════════════════════════════════════════════════
+class ImageTrailVariant6 {
+  constructor(container) { this._setup(container); }
+  _setup(container) {
+    this.container = container;
+    this.images = [...container.querySelectorAll('.content__img')].map(el => new ImageItem(el));
+    this.imagesTotal = this.images.length;
+    this.imgPosition = 0; this.zIndexVal = 1;
+    this.activeImagesCount = 0; this.isIdle = true; this.threshold = 80;
+    this.mousePos = {x:0,y:0}; this.lastMousePos = {x:0,y:0}; this.cacheMousePos = {x:0,y:0};
+    const move = ev => { const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r); };
+    container.addEventListener('mousemove', move); container.addEventListener('touchmove', move);
+    const init = ev => {
+      const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r);
+      this.cacheMousePos = {...this.mousePos};
+      requestAnimationFrame(() => this.render());
+      container.removeEventListener('mousemove', init); container.removeEventListener('touchmove', init);
+    };
+    container.addEventListener('mousemove', init); container.addEventListener('touchmove', init);
+  }
+  render() {
+    const d = getMouseDistance(this.mousePos, this.lastMousePos);
+    this.cacheMousePos.x = lerp(this.cacheMousePos.x, this.mousePos.x, 0.3);
+    this.cacheMousePos.y = lerp(this.cacheMousePos.y, this.mousePos.y, 0.3);
+    if (d > this.threshold) { this.showNextImage(); this.lastMousePos = {...this.mousePos}; }
+    if (this.isIdle && this.zIndexVal !== 1) this.zIndexVal = 1;
+    requestAnimationFrame(() => this.render());
+  }
+  map(speed, min, max, maxSpeed) { return min + (max - min) * Math.min(speed / maxSpeed, 1); }
+  showNextImage() {
+    const dx = this.mousePos.x - this.cacheMousePos.x;
+    const dy = this.mousePos.y - this.cacheMousePos.y;
+    const speed = Math.sqrt(dx*dx + dy*dy);
+    ++this.zIndexVal;
+    this.imgPosition = this.imgPosition < this.imagesTotal - 1 ? this.imgPosition + 1 : 0;
+    const img = this.images[this.imgPosition];
+    const scale = this.map(speed, 0.3, 2, 200);
+    const brightness = this.map(speed, 0, 1.3, 70);
+    const blur = this.map(speed, 20, 0, 90);
+    const gray = this.map(speed, 600, 0, 90);
+    gsap.killTweensOf(img.DOM.el);
+    gsap.timeline({ onStart:()=>this.onImageActivated(), onComplete:()=>this.onImageDeactivated() })
+      .fromTo(img.DOM.el,
+        { opacity:1, scale:0, zIndex:this.zIndexVal, x: this.cacheMousePos.x - img.rect.width/2, y: this.cacheMousePos.y - img.rect.height/2 },
+        { duration:0.8, ease:'power3', scale, filter:`grayscale(${gray*100}%) brightness(${brightness*100}%) blur(${blur}px)`, x: this.mousePos.x - img.rect.width/2, y: this.mousePos.y - img.rect.height/2 }, 0)
+      .fromTo(img.DOM.inner, { scale:2 }, { duration:0.8, ease:'power3', scale:1 }, 0)
+      .to(img.DOM.el, { duration:0.4, ease:'power3.in', opacity:0, scale:0.2 }, 0.45);
+  }
+  onImageActivated()   { this.activeImagesCount++; this.isIdle = false; }
+  onImageDeactivated() { this.activeImagesCount--; if (!this.activeImagesCount) this.isIdle = true; }
+}
+
+// ═══════════════════════════════════════════════════
+//  VARIANT 7  — stacked pile (up to 9 visible)
+// ═══════════════════════════════════════════════════
+class ImageTrailVariant7 {
+  constructor(container) { this._setup(container); }
+  _setup(container) {
+    this.container = container;
+    this.images = [...container.querySelectorAll('.content__img')].map(el => new ImageItem(el));
+    this.imagesTotal = this.images.length;
+    this.imgPosition = 0; this.zIndexVal = 1;
+    this.activeImagesCount = 0; this.isIdle = true; this.threshold = 80;
+    this.mousePos = {x:0,y:0}; this.lastMousePos = {x:0,y:0}; this.cacheMousePos = {x:0,y:0};
+    this.visibleImagesCount = 0;
+    this.visibleImagesTotal = Math.min(9, this.imagesTotal - 1);
+    const move = ev => { const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r); };
+    container.addEventListener('mousemove', move); container.addEventListener('touchmove', move);
+    const init = ev => {
+      const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r);
+      this.cacheMousePos = {...this.mousePos};
+      requestAnimationFrame(() => this.render());
+      container.removeEventListener('mousemove', init); container.removeEventListener('touchmove', init);
+    };
+    container.addEventListener('mousemove', init); container.addEventListener('touchmove', init);
+  }
+  render() {
+    const d = getMouseDistance(this.mousePos, this.lastMousePos);
+    this.cacheMousePos.x = lerp(this.cacheMousePos.x, this.mousePos.x, 0.3);
+    this.cacheMousePos.y = lerp(this.cacheMousePos.y, this.mousePos.y, 0.3);
+    if (d > this.threshold) { this.showNextImage(); this.lastMousePos = {...this.mousePos}; }
+    if (this.isIdle && this.zIndexVal !== 1) this.zIndexVal = 1;
+    requestAnimationFrame(() => this.render());
+  }
+  showNextImage() {
+    ++this.zIndexVal;
+    this.imgPosition = this.imgPosition < this.imagesTotal - 1 ? this.imgPosition + 1 : 0;
+    const img = this.images[this.imgPosition];
+    ++this.visibleImagesCount;
+    gsap.killTweensOf(img.DOM.el);
+    const sv = gsap.utils.random(0.5, 1.6);
+    gsap.timeline({ onStart:()=>this.onImageActivated(), onComplete:()=>this.onImageDeactivated() })
+      .fromTo(img.DOM.el,
+        { scale: sv - Math.max(gsap.utils.random(0.2,0.6),0), rotationZ:0, opacity:1, zIndex:this.zIndexVal, x: this.cacheMousePos.x - img.rect.width/2, y: this.cacheMousePos.y - img.rect.height/2 },
+        { duration:0.4, ease:'power3', scale:sv, rotationZ:gsap.utils.random(-3,3), x: this.mousePos.x - img.rect.width/2, y: this.mousePos.y - img.rect.height/2 }, 0);
+    if (this.visibleImagesCount >= this.visibleImagesTotal) {
+      const last = getNewPosition(this.imgPosition, this.visibleImagesTotal, this.images);
+      const oldImg = this.images[last];
+      gsap.to(oldImg.DOM.el, { duration:0.4, ease:'power4', opacity:0, scale:1.3,
+        onComplete:()=>{ if (!this.activeImagesCount) this.isIdle = true; } });
+    }
+  }
+  onImageActivated()   { this.activeImagesCount++; this.isIdle = false; }
+  onImageDeactivated() { this.activeImagesCount--; }
+}
+
+// ═══════════════════════════════════════════════════
+//  VARIANT 8  — 3D perspective tilt based on position
+// ═══════════════════════════════════════════════════
+class ImageTrailVariant8 {
+  constructor(container) { this._setup(container); }
+  _setup(container) {
+    this.container = container;
+    this.images = [...container.querySelectorAll('.content__img')].map(el => new ImageItem(el));
+    this.imagesTotal = this.images.length;
+    this.imgPosition = 0; this.zIndexVal = 1;
+    this.activeImagesCount = 0; this.isIdle = true; this.threshold = 80;
+    this.mousePos = {x:0,y:0}; this.lastMousePos = {x:0,y:0}; this.cacheMousePos = {x:0,y:0};
+    this.rotation = {x:0,y:0}; this.cachedRotation = {x:0,y:0};
+    this.zValue = 0; this.cachedZValue = 0;
+    const move = ev => { const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r); };
+    container.addEventListener('mousemove', move); container.addEventListener('touchmove', move);
+    const init = ev => {
+      const r = container.getBoundingClientRect(); this.mousePos = getLocalPointerPos(ev, r);
+      this.cacheMousePos = {...this.mousePos};
+      requestAnimationFrame(() => this.render());
+      container.removeEventListener('mousemove', init); container.removeEventListener('touchmove', init);
+    };
+    container.addEventListener('mousemove', init); container.addEventListener('touchmove', init);
+  }
+  render() {
+    const d = getMouseDistance(this.mousePos, this.lastMousePos);
+    this.cacheMousePos.x = lerp(this.cacheMousePos.x, this.mousePos.x, 0.1);
+    this.cacheMousePos.y = lerp(this.cacheMousePos.y, this.mousePos.y, 0.1);
+    if (d > this.threshold) { this.showNextImage(); this.lastMousePos = {...this.mousePos}; }
+    if (this.isIdle && this.zIndexVal !== 1) this.zIndexVal = 1;
+    requestAnimationFrame(() => this.render());
+  }
+  showNextImage() {
+    const r = this.container.getBoundingClientRect();
+    const cx = r.width/2, cy = r.height/2;
+    const relX = this.mousePos.x - cx, relY = this.mousePos.y - cy;
+    this.rotation.x = -(relY/cy)*30; this.rotation.y = (relX/cx)*30;
+    this.cachedRotation = {...this.rotation};
+    const dist = Math.sqrt(relX*relX + relY*relY);
+    const maxD = Math.sqrt(cx*cx + cy*cy);
+    this.zValue = (dist/maxD)*1200 - 600; this.cachedZValue = this.zValue;
+    const brightness = 0.2 + ((this.zValue+600)/1200)*2.3;
+    ++this.zIndexVal;
+    this.imgPosition = this.imgPosition < this.imagesTotal - 1 ? this.imgPosition + 1 : 0;
+    const img = this.images[this.imgPosition];
+    gsap.killTweensOf(img.DOM.el);
+    gsap.timeline({ onStart:()=>this.onImageActivated(), onComplete:()=>this.onImageDeactivated() })
+      .set(this.container, { perspective:1000 }, 0)
+      .fromTo(img.DOM.el,
+        { opacity:1, z:0, scale:1+this.cachedZValue/1000, zIndex:this.zIndexVal, x: this.cacheMousePos.x - img.rect.width/2, y: this.cacheMousePos.y - img.rect.height/2, rotationX:this.cachedRotation.x, rotationY:this.cachedRotation.y, filter:`brightness(${brightness})` },
+        { duration:1, ease:'expo', scale:1+this.zValue/1000, x: this.mousePos.x - img.rect.width/2, y: this.mousePos.y - img.rect.height/2, rotationX:this.rotation.x, rotationY:this.rotation.y }, 0)
+      .to(img.DOM.el, { duration:0.4, ease:'power2', opacity:0, z:-800 }, 0.3);
+  }
+  onImageActivated()   { this.activeImagesCount++; this.isIdle = false; }
+  onImageDeactivated() { this.activeImagesCount--; if (!this.activeImagesCount) this.isIdle = true; }
+}
+
+// ═══════════════════════════════════════════════════
+//  Variant map
+// ═══════════════════════════════════════════════════
+const variantMap = { 1:ImageTrailVariant1, 2:ImageTrailVariant2, 3:ImageTrailVariant3, 4:ImageTrailVariant4, 5:ImageTrailVariant5, 6:ImageTrailVariant6, 7:ImageTrailVariant7, 8:ImageTrailVariant8 };
+
+// ═══════════════════════════════════════════════════
+//  Init / reinit
+// ═══════════════════════════════════════════════════
+let activeVariant = 1;
+
+function initTrail(variant) {
+  activeVariant = variant;
+  const container = document.getElementById('trail');
+  // Reset container
+  container.innerHTML = '';
+  IMAGES.forEach(url => {
+    const img = document.createElement('div');
+    img.className = 'content__img';
+    const inner = document.createElement('div');
+    inner.className = 'content__img-inner';
+    inner.style.backgroundImage = `url(${url})`;
+    img.appendChild(inner);
+    container.appendChild(img);
+  });
+  new (variantMap[variant] || variantMap[1])(container);
+  document.getElementById('varLabel').textContent = VARIANT_LABELS[variant];
+  document.querySelectorAll('.var-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.v) === variant);
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  Build variant buttons
+// ═══════════════════════════════════════════════════
+const ctrl = document.getElementById('controls');
+for (let v = 1; v <= 8; v++) {
+  const btn = document.createElement('button');
+  btn.className = 'var-btn' + (v === 1 ? ' active' : '');
+  btn.textContent = v;
+  btn.dataset.v = v;
+  btn.title = VARIANT_LABELS[v];
+  btn.addEventListener('click', () => initTrail(v));
+  ctrl.appendChild(btn);
+}
+
+// Start with variant 1
+initTrail(1);
+</script>
+</body>
+</html>
