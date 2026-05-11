@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Color Bends</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.min.js"
+    }
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #080810; font-family: 'Inter', sans-serif; }
+
+    /* ── Canvas container ── */
+    #color-bends {
+      position: fixed; inset: 0;
+      width: 100vw; height: 100vh;
+    }
+    #color-bends canvas {
+      width: 100% !important; height: 100% !important; display: block;
+    }
+
+    /* ── Controls panel ── */
+    #panel {
+      position: fixed; top: 20px; right: 20px; z-index: 10;
+      width: 260px;
+      background: rgba(8,8,16,0.82);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(168,85,247,0.18);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    #panel summary {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px;
+      font-size: 0.65rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase;
+      color: rgba(168,85,247,0.7); cursor: pointer; user-select: none;
+      list-style: none;
+    }
+    #panel summary::after { content: '▾'; margin-left: auto; opacity: .5; }
+    #panel[open] summary::after { content: '▴'; }
+
+    .ctrl-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+    .ctrl-row { display: flex; align-items: center; gap: 8px; }
+    .ctrl-row label { font-size: 0.68rem; color: rgba(255,255,255,0.35); min-width: 88px; }
+    .ctrl-row input[type=range] { flex: 1; accent-color: #a855f7; height: 2px; cursor: pointer; }
+    .ctrl-row span { font-size: 0.62rem; font-family: 'JetBrains Mono', monospace; color: rgba(255,255,255,0.22); min-width: 32px; text-align: right; }
+
+    /* Preset color swatches */
+    .preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+    .preset-btn {
+      height: 22px; padding: 0 10px; border-radius: 9999px;
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase;
+      color: rgba(255,255,255,0.5); background: transparent; cursor: pointer;
+      transition: border-color .2s, color .2s, background .2s;
+    }
+    .preset-btn:hover  { border-color: rgba(168,85,247,0.5); color: #c084fc; }
+    .preset-btn.active { border-color: #a855f7; color: #e9d5ff; background: rgba(168,85,247,0.15); }
+
+    .section-label { font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(255,255,255,0.2); margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<div id="color-bends"></div>
+
+<details id="panel" open>
+  <summary>Color Bends</summary>
+  <div class="ctrl-body">
+
+    <span class="section-label">Palette</span>
+    <div class="preset-row" id="presets"></div>
+
+    <span class="section-label">Motion</span>
+    <div class="ctrl-row">
+      <label>Speed</label>
+      <input type="range" id="speed" min="0" max="1" step="0.01" value="0.2">
+      <span id="speedVal">0.20</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Auto Rotate</label>
+      <input type="range" id="autoRotate" min="0" max="40" step="0.5" value="0">
+      <span id="autoRotateVal">0.0</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Rotation</label>
+      <input type="range" id="rotation" min="0" max="360" step="1" value="90">
+      <span id="rotationVal">90</span>
+    </div>
+
+    <span class="section-label">Shape</span>
+    <div class="ctrl-row">
+      <label>Frequency</label>
+      <input type="range" id="frequency" min="0.1" max="4" step="0.05" value="1">
+      <span id="frequencyVal">1.00</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Warp</label>
+      <input type="range" id="warpStrength" min="0" max="3" step="0.05" value="1">
+      <span id="warpStrengthVal">1.00</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Band Width</label>
+      <input type="range" id="bandWidth" min="1" max="16" step="0.2" value="6">
+      <span id="bandWidthVal">6.0</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Scale</label>
+      <input type="range" id="scale" min="0.1" max="4" step="0.05" value="1">
+      <span id="scaleVal">1.00</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Iterations</label>
+      <input type="range" id="iterations" min="1" max="5" step="1" value="1">
+      <span id="iterationsVal">1</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Intensity</label>
+      <input type="range" id="intensity" min="0.1" max="4" step="0.05" value="1.5">
+      <span id="intensityVal">1.50</span>
+    </div>
+
+    <span class="section-label">Interaction</span>
+    <div class="ctrl-row">
+      <label>Mouse Infl.</label>
+      <input type="range" id="mouseInfluence" min="0" max="3" step="0.05" value="1">
+      <span id="mouseInfluenceVal">1.00</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Parallax</label>
+      <input type="range" id="parallax" min="0" max="2" step="0.05" value="0.5">
+      <span id="parallaxVal">0.50</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Noise</label>
+      <input type="range" id="noise" min="0" max="0.5" step="0.005" value="0.15">
+      <span id="noiseVal">0.150</span>
+    </div>
+
+  </div>
+</details>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ═══════════════════════════════════════════════════
+//  SHADERS  (exact copy from React source)
+// ═══════════════════════════════════════════════════
+const MAX_COLORS = 8;
+
+const frag = `
+#define MAX_COLORS ${MAX_COLORS}
+uniform vec2 uCanvas;
+uniform float uTime;
+uniform float uSpeed;
+uniform vec2 uRot;
+uniform int uColorCount;
+uniform vec3 uColors[MAX_COLORS];
+uniform int uTransparent;
+uniform float uScale;
+uniform float uFrequency;
+uniform float uWarpStrength;
+uniform vec2 uPointer;
+uniform float uMouseInfluence;
+uniform float uParallax;
+uniform float uNoise;
+uniform int uIterations;
+uniform float uIntensity;
+uniform float uBandWidth;
+varying vec2 vUv;
+
+void main() {
+  float t = uTime * uSpeed;
+  vec2 p = vUv * 2.0 - 1.0;
+  p += uPointer * uParallax * 0.1;
+  vec2 rp = vec2(p.x * uRot.x - p.y * uRot.y, p.x * uRot.y + p.y * uRot.x);
+  vec2 q = vec2(rp.x * (uCanvas.x / uCanvas.y), rp.y);
+  q /= max(uScale, 0.0001);
+  q /= 0.5 + 0.2 * dot(q, q);
+  q += 0.2 * cos(t) - 7.56;
+  vec2 toward = (uPointer - rp);
+  q += toward * uMouseInfluence * 0.2;
+
+  for (int j = 0; j < 5; j++) {
+    if (j >= uIterations - 1) break;
+    vec2 rr = sin(1.5 * (q.yx * uFrequency) + 2.0 * cos(q * uFrequency));
+    q += (rr - q) * 0.15;
+  }
+
+  vec3 col = vec3(0.0);
+  float a = 1.0;
+
+  if (uColorCount > 0) {
+    vec2 s = q;
+    vec3 sumCol = vec3(0.0);
+    float cover = 0.0;
+    for (int i = 0; i < MAX_COLORS; ++i) {
+      if (i >= uColorCount) break;
+      s -= 0.01;
+      vec2 r = sin(1.5 * (s.yx * uFrequency) + 2.0 * cos(s * uFrequency));
+      float m0 = length(r + sin(5.0 * r.y * uFrequency - 3.0 * t + float(i)) / 4.0);
+      float kBelow = clamp(uWarpStrength, 0.0, 1.0);
+      float kMix = pow(kBelow, 0.3);
+      float gain = 1.0 + max(uWarpStrength - 1.0, 0.0);
+      vec2 disp = (r - s) * kBelow;
+      vec2 warped = s + disp * gain;
+      float m1 = length(warped + sin(5.0 * warped.y * uFrequency - 3.0 * t + float(i)) / 4.0);
+      float m = mix(m0, m1, kMix);
+      float w = 1.0 - exp(-uBandWidth / exp(uBandWidth * m));
+      sumCol += uColors[i] * w;
+      cover = max(cover, w);
+    }
+    col = clamp(sumCol, 0.0, 1.0);
+    a = uTransparent > 0 ? cover : 1.0;
+  } else {
+    vec2 s = q;
+    for (int k = 0; k < 3; ++k) {
+      s -= 0.01;
+      vec2 r = sin(1.5 * (s.yx * uFrequency) + 2.0 * cos(s * uFrequency));
+      float m0 = length(r + sin(5.0 * r.y * uFrequency - 3.0 * t + float(k)) / 4.0);
+      float kBelow = clamp(uWarpStrength, 0.0, 1.0);
+      float kMix = pow(kBelow, 0.3);
+      float gain = 1.0 + max(uWarpStrength - 1.0, 0.0);
+      vec2 disp = (r - s) * kBelow;
+      vec2 warped = s + disp * gain;
+      float m1 = length(warped + sin(5.0 * warped.y * uFrequency - 3.0 * t + float(k)) / 4.0);
+      float m = mix(m0, m1, kMix);
+      col[k] = 1.0 - exp(-uBandWidth / exp(uBandWidth * m));
+    }
+    a = uTransparent > 0 ? max(max(col.r, col.g), col.b) : 1.0;
+  }
+
+  col *= uIntensity;
+
+  if (uNoise > 0.0001) {
+    float n = fract(sin(dot(gl_FragCoord.xy + vec2(uTime), vec2(12.9898, 78.233))) * 43758.5453123);
+    col += (n - 0.5) * uNoise;
+    col = clamp(col, 0.0, 1.0);
+  }
+
+  vec3 rgb = (uTransparent > 0) ? col * a : col;
+  gl_FragColor = vec4(rgb, a);
+}
+`;
+
+const vert = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = vec4(position, 1.0);
+}
+`;
+
+// ═══════════════════════════════════════════════════
+//  COLOR PRESETS
+// ═══════════════════════════════════════════════════
+const PRESETS = [
+  { name: 'RGB',     colors: [] },
+  { name: 'Violet',  colors: ['#a855f7','#6366f1','#3b82f6','#06b6d4'] },
+  { name: 'Sunset',  colors: ['#f97316','#ec4899','#8b5cf6','#6366f1'] },
+  { name: 'Ocean',   colors: ['#06b6d4','#3b82f6','#6366f1','#a855f7'] },
+  { name: 'Fire',    colors: ['#fbbf24','#f97316','#ef4444','#ec4899'] },
+  { name: 'Forest',  colors: ['#22c55e','#84cc16','#06b6d4','#3b82f6'] },
+  { name: 'Neon',    colors: ['#f0abfc','#818cf8','#34d399','#fbbf24'] },
+  { name: 'Mono',    colors: ['#ffffff','#9ca3af','#374151'] },
+];
+
+// ═══════════════════════════════════════════════════
+//  CONFIG  (matches React default props exactly)
+// ═══════════════════════════════════════════════════
+const CFG = {
+  rotation:       90,
+  speed:          0.2,
+  colors:         [],
+  transparent:    true,
+  autoRotate:     0,
+  scale:          1,
+  frequency:      1,
+  warpStrength:   1,
+  mouseInfluence: 1,
+  parallax:       0.5,
+  noise:          0.15,
+  iterations:     1,
+  intensity:      1.5,
+  bandWidth:      6,
+};
+
+// ═══════════════════════════════════════════════════
+//  THREE.JS SETUP
+// ═══════════════════════════════════════════════════
+const container = document.getElementById('color-bends');
+const scene     = new THREE.Scene();
+const camera    = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const geometry  = new THREE.PlaneGeometry(2, 2);
+
+const uColorsArray = Array.from({ length: MAX_COLORS }, () => new THREE.Vector3(0, 0, 0));
+
+const material = new THREE.ShaderMaterial({
+  vertexShader:   vert,
+  fragmentShader: frag,
+  uniforms: {
+    uCanvas:         { value: new THREE.Vector2(1, 1) },
+    uTime:           { value: 0 },
+    uSpeed:          { value: CFG.speed },
+    uRot:            { value: new THREE.Vector2(1, 0) },
+    uColorCount:     { value: 0 },
+    uColors:         { value: uColorsArray },
+    uTransparent:    { value: CFG.transparent ? 1 : 0 },
+    uScale:          { value: CFG.scale },
+    uFrequency:      { value: CFG.frequency },
+    uWarpStrength:   { value: CFG.warpStrength },
+    uPointer:        { value: new THREE.Vector2(0, 0) },
+    uMouseInfluence: { value: CFG.mouseInfluence },
+    uParallax:       { value: CFG.parallax },
+    uNoise:          { value: CFG.noise },
+    uIterations:     { value: CFG.iterations },
+    uIntensity:      { value: CFG.intensity },
+    uBandWidth:      { value: CFG.bandWidth },
+  },
+  premultipliedAlpha: true,
+  transparent: true,
+});
+
+const mesh = new THREE.Mesh(geometry, material);
+scene.add(mesh);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: false,
+  powerPreference: 'high-performance',
+  alpha: true,
+});
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setClearColor(0x000000, CFG.transparent ? 0 : 1);
+renderer.domElement.style.width  = '100%';
+renderer.domElement.style.height = '100%';
+renderer.domElement.style.display = 'block';
+container.appendChild(renderer.domElement);
+
+// ── Resize ──
+function handleResize() {
+  const w = container.clientWidth  || 1;
+  const h = container.clientHeight || 1;
+  renderer.setSize(w, h, false);
+  material.uniforms.uCanvas.value.set(w, h);
+}
+handleResize();
+new ResizeObserver(handleResize).observe(container);
+
+// ── Pointer tracking ──
+const pointerTarget  = new THREE.Vector2(0, 0);
+const pointerCurrent = new THREE.Vector2(0, 0);
+const POINTER_SMOOTH = 8;
+
+container.addEventListener('pointermove', e => {
+  const rect = container.getBoundingClientRect();
+  const x =  ((e.clientX - rect.left) / (rect.width  || 1)) * 2 - 1;
+  const y = -(((e.clientY - rect.top)  / (rect.height || 1)) * 2 - 1);
+  pointerTarget.set(x, y);
+});
+
+// ── Helpers ──
+function toVec3(hex) {
+  const h = hex.replace('#', '').trim();
+  const v = h.length === 3
+    ? [parseInt(h[0]+h[0],16), parseInt(h[1]+h[1],16), parseInt(h[2]+h[2],16)]
+    : [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+  return new THREE.Vector3(v[0]/255, v[1]/255, v[2]/255);
+}
+
+function applyColors(colors) {
+  const arr = (colors||[]).filter(Boolean).slice(0, MAX_COLORS).map(toVec3);
+  for (let i = 0; i < MAX_COLORS; i++) {
+    const vec = material.uniforms.uColors.value[i];
+    i < arr.length ? vec.copy(arr[i]) : vec.set(0, 0, 0);
+  }
+  material.uniforms.uColorCount.value = arr.length;
+}
+
+function syncUniforms() {
+  material.uniforms.uSpeed.value          = CFG.speed;
+  material.uniforms.uScale.value          = CFG.scale;
+  material.uniforms.uFrequency.value      = CFG.frequency;
+  material.uniforms.uWarpStrength.value   = CFG.warpStrength;
+  material.uniforms.uMouseInfluence.value = CFG.mouseInfluence;
+  material.uniforms.uParallax.value       = CFG.parallax;
+  material.uniforms.uNoise.value          = CFG.noise;
+  material.uniforms.uIterations.value     = CFG.iterations;
+  material.uniforms.uIntensity.value      = CFG.intensity;
+  material.uniforms.uBandWidth.value      = CFG.bandWidth;
+  material.uniforms.uTransparent.value    = CFG.transparent ? 1 : 0;
+  renderer.setClearColor(0x000000, CFG.transparent ? 0 : 1);
+  applyColors(CFG.colors);
+}
+syncUniforms();
+
+// ── Animation loop ──
+const clock = new THREE.Clock();
+
+(function loop() {
+  requestAnimationFrame(loop);
+  const dt      = clock.getDelta();
+  const elapsed = clock.elapsedTime;
+  material.uniforms.uTime.value = elapsed;
+
+  const deg = (CFG.rotation % 360) + CFG.autoRotate * elapsed;
+  const rad = deg * Math.PI / 180;
+  material.uniforms.uRot.value.set(Math.cos(rad), Math.sin(rad));
+
+  const amt = Math.min(1, dt * POINTER_SMOOTH);
+  pointerCurrent.lerp(pointerTarget, amt);
+  material.uniforms.uPointer.value.copy(pointerCurrent);
+
+  renderer.render(scene, camera);
+})();
+
+// ═══════════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════════
+
+// Preset buttons
+const presetsEl = document.getElementById('presets');
+let activePreset = 'RGB';
+
+PRESETS.forEach(p => {
+  const btn = document.createElement('button');
+  btn.className = 'preset-btn' + (p.name === activePreset ? ' active' : '');
+  btn.textContent = p.name;
+  btn.addEventListener('click', () => {
+    CFG.colors = p.colors;
+    activePreset = p.name;
+    applyColors(CFG.colors);
+    presetsEl.querySelectorAll('.preset-btn').forEach(b =>
+      b.classList.toggle('active', b.textContent === p.name)
+    );
+  });
+  presetsEl.appendChild(btn);
+});
+
+// Slider helper
+function bindSlider(id, key, decimals, callback) {
+  const el  = document.getElementById(id);
+  const val = document.getElementById(id + 'Val');
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    CFG[key] = key === 'iterations' ? Math.round(v) : v;
+    val.textContent = key === 'iterations' ? String(Math.round(v)) : v.toFixed(decimals);
+    if (callback) callback(v);
+    else syncUniforms();
+  });
+}
+
+bindSlider('speed',          'speed',          2);
+bindSlider('autoRotate',     'autoRotate',      1);
+bindSlider('rotation',       'rotation',        0);
+bindSlider('frequency',      'frequency',       2);
+bindSlider('warpStrength',   'warpStrength',    2);
+bindSlider('bandWidth',      'bandWidth',       1);
+bindSlider('scale',          'scale',           2);
+bindSlider('iterations',     'iterations',      0);
+bindSlider('intensity',      'intensity',       2);
+bindSlider('mouseInfluence', 'mouseInfluence',  2);
+bindSlider('parallax',       'parallax',        2);
+bindSlider('noise',          'noise',           3);
+</script>
+</body>
+</html>
