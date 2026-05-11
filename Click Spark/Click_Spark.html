@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Click Spark</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #080810;
+      font-family: 'Inter', sans-serif;
+      color: #fff;
+    }
+
+    /* ── ClickSpark container (exact React inline styles) ── */
+    #spark-root {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    #spark-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      user-select: none;
+      position: absolute;
+      top: 0; left: 0;
+      pointer-events: none;
+    }
+
+    /* ── Demo content (children) ── */
+    #content {
+      position: relative;
+      width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      pointer-events: none;
+    }
+
+    .hero-title {
+      font-size: clamp(2rem, 6vw, 5rem);
+      font-weight: 300;
+      letter-spacing: 0.04em;
+      color: rgba(255,255,255,0.85);
+      text-align: center;
+      line-height: 1.15;
+    }
+    .hero-sub {
+      font-size: 0.8rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(168,85,247,0.6);
+    }
+
+    /* Demo cards */
+    .cards {
+      display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
+      pointer-events: none;
+    }
+    .card {
+      width: 140px; height: 80px;
+      border: 1px solid rgba(168,85,247,0.2);
+      border-radius: 12px;
+      background: rgba(168,85,247,0.06);
+      backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+    }
+
+    /* ── Controls panel ── */
+    #panel {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+      padding: 14px 20px;
+      background: rgba(8,8,16,0.85);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(168,85,247,0.15);
+      border-radius: 16px;
+      z-index: 10;
+      pointer-events: auto;
+    }
+
+    .ctrl {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .ctrl label {
+      font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+    }
+    .ctrl input[type=range] {
+      width: 90px; accent-color: #a855f7; cursor: pointer;
+    }
+    .ctrl select {
+      background: rgba(168,85,247,0.08);
+      border: 1px solid rgba(168,85,247,0.2);
+      border-radius: 6px; color: rgba(255,255,255,0.5);
+      font-size: 0.65rem; padding: 3px 6px; cursor: pointer;
+    }
+    .ctrl span {
+      font-size: 0.6rem; color: rgba(168,85,247,0.5); font-variant-numeric: tabular-nums;
+    }
+
+    /* Color swatches */
+    .swatch-row { display: flex; gap: 6px; }
+    .swatch {
+      width: 20px; height: 20px; border-radius: 50%;
+      border: 2px solid transparent; cursor: pointer;
+      transition: border-color .15s;
+    }
+    .swatch.active { border-color: #a855f7; }
+  </style>
+</head>
+<body>
+
+<div id="spark-root">
+  <canvas id="spark-canvas"></canvas>
+
+  <!-- children (demo content) -->
+  <div id="content">
+    <p class="hero-sub">Click anywhere to spark</p>
+    <h1 class="hero-title">Click<br>Spark</h1>
+    <div class="cards">
+      <div class="card">Click me</div>
+      <div class="card">Anywhere</div>
+      <div class="card">Try it!</div>
+    </div>
+  </div>
+</div>
+
+<!-- Controls -->
+<div id="panel">
+  <div class="ctrl">
+    <label>Color</label>
+    <div class="swatch-row" id="swatches"></div>
+  </div>
+  <div class="ctrl">
+    <label>Spark Size</label>
+    <input type="range" id="sparkSize" min="2" max="40" step="1" value="10">
+    <span id="sparkSizeVal">10</span>
+  </div>
+  <div class="ctrl">
+    <label>Radius</label>
+    <input type="range" id="sparkRadius" min="5" max="80" step="1" value="15">
+    <span id="sparkRadiusVal">15</span>
+  </div>
+  <div class="ctrl">
+    <label>Count</label>
+    <input type="range" id="sparkCount" min="2" max="24" step="1" value="8">
+    <span id="sparkCountVal">8</span>
+  </div>
+  <div class="ctrl">
+    <label>Duration (ms)</label>
+    <input type="range" id="duration" min="100" max="1200" step="50" value="400">
+    <span id="durationVal">400</span>
+  </div>
+  <div class="ctrl">
+    <label>Extra Scale</label>
+    <input type="range" id="extraScale" min="0.2" max="4" step="0.1" value="1">
+    <span id="extraScaleVal">1.0</span>
+  </div>
+  <div class="ctrl">
+    <label>Easing</label>
+    <select id="easing">
+      <option value="ease-out" selected>ease-out</option>
+      <option value="ease-in">ease-in</option>
+      <option value="ease-in-out">ease-in-out</option>
+      <option value="linear">linear</option>
+    </select>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  CONFIG  (default props from React component)
+// ═══════════════════════════════════════════════════
+const CFG = {
+  sparkColor:  '#fff',
+  sparkSize:   10,
+  sparkRadius: 15,
+  sparkCount:  8,
+  duration:    400,
+  easing:      'ease-out',
+  extraScale:  1.0,
+};
+
+// ═══════════════════════════════════════════════════
+//  CANVAS SETUP  (exact ResizeObserver logic from React)
+// ═══════════════════════════════════════════════════
+const canvas   = document.getElementById('spark-canvas');
+const sparkRoot = document.getElementById('spark-root');
+const ctx      = canvas.getContext('2d');
+let resizeTimeout;
+
+const resizeCanvas = () => {
+  const { width, height } = sparkRoot.getBoundingClientRect();
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width  = width;
+    canvas.height = height;
+  }
+};
+const handleResize = () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(resizeCanvas, 100);
+};
+new ResizeObserver(handleResize).observe(sparkRoot);
+resizeCanvas();
+
+// ═══════════════════════════════════════════════════
+//  EASING  (exact switch from React source)
+// ═══════════════════════════════════════════════════
+function easeFunc(t) {
+  switch (CFG.easing) {
+    case 'linear':      return t;
+    case 'ease-in':     return t * t;
+    case 'ease-in-out': return t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
+    default:            return t * (2 - t);   // ease-out
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  SPARKS STORE  (ref equivalent)
+// ═══════════════════════════════════════════════════
+let sparks = [];
+
+// ═══════════════════════════════════════════════════
+//  ANIMATION LOOP  (exact draw() logic from React)
+// ═══════════════════════════════════════════════════
+function draw(timestamp) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  sparks = sparks.filter(spark => {
+    const elapsed = timestamp - spark.startTime;
+    if (elapsed >= CFG.duration) return false;
+
+    const progress = elapsed / CFG.duration;
+    const eased    = easeFunc(progress);
+
+    const distance   = eased * CFG.sparkRadius * CFG.extraScale;
+    const lineLength = CFG.sparkSize * (1 - eased);
+
+    const x1 = spark.x + distance * Math.cos(spark.angle);
+    const y1 = spark.y + distance * Math.sin(spark.angle);
+    const x2 = spark.x + (distance + lineLength) * Math.cos(spark.angle);
+    const y2 = spark.y + (distance + lineLength) * Math.sin(spark.angle);
+
+    ctx.strokeStyle = CFG.sparkColor;
+    ctx.lineWidth   = 2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    return true;
+  });
+
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+// ═══════════════════════════════════════════════════
+//  CLICK HANDLER  (exact handleClick from React)
+// ═══════════════════════════════════════════════════
+sparkRoot.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const x    = e.clientX - rect.left;
+  const y    = e.clientY - rect.top;
+  const now  = performance.now();
+
+  const newSparks = Array.from({ length: CFG.sparkCount }, (_, i) => ({
+    x, y,
+    angle:     (2 * Math.PI * i) / CFG.sparkCount,
+    startTime: now,
+  }));
+  sparks.push(...newSparks);
+});
+
+// ═══════════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════════
+
+// Color swatches
+const COLORS = [
+  { label: 'White',    hex: '#ffffff' },
+  { label: 'Purple',   hex: '#a855f7' },
+  { label: 'Cyan',     hex: '#06b6d4' },
+  { label: 'Pink',     hex: '#ec4899' },
+  { label: 'Amber',    hex: '#fbbf24' },
+  { label: 'Green',    hex: '#22c55e' },
+  { label: 'Red',      hex: '#ef4444' },
+];
+const swatchRow = document.getElementById('swatches');
+COLORS.forEach(c => {
+  const btn = document.createElement('div');
+  btn.className = 'swatch' + (c.hex === CFG.sparkColor ? ' active' : '');
+  btn.title = c.label;
+  btn.style.background = c.hex;
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    CFG.sparkColor = c.hex;
+    swatchRow.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+  });
+  swatchRow.appendChild(btn);
+});
+
+// Slider binder
+function bindSlider(id, key, fixed) {
+  const el  = document.getElementById(id);
+  const val = document.getElementById(id + 'Val');
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    CFG[key] = (key === 'sparkCount') ? Math.round(v) : v;
+    val.textContent = fixed != null ? v.toFixed(fixed) : String(Math.round(v));
+  });
+}
+bindSlider('sparkSize',   'sparkSize',   0);
+bindSlider('sparkRadius', 'sparkRadius', 0);
+bindSlider('sparkCount',  'sparkCount',  null);
+bindSlider('duration',    'duration',    0);
+bindSlider('extraScale',  'extraScale',  1);
+
+document.getElementById('easing').addEventListener('change', e => {
+  CFG.easing = e.target.value;
+});
+
+// Stop panel clicks from spawning sparks
+document.getElementById('panel').addEventListener('click', e => e.stopPropagation());
+</script>
+</body>
+</html>
